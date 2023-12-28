@@ -1,8 +1,9 @@
 module Main (main) where
 
-import Lib
+import Lib (runFile, runPrompt)
 
 import System.Environment
+import System.IO
 import qualified System.Exit as Exit
 
 main :: IO ()
@@ -11,9 +12,17 @@ main = do
         progName <- getProgName
         putStrLn  $ "Running: "++ progName
 
-        if length args < 2
+        if null args
             then do
-                putStrLn "Usage: loxit <file.lox>"
+                putStrLn "Interpreter mode:"
+                hSetBuffering stdin NoBuffering
+                hSetBuffering stdout NoBuffering
+                runPrompt
                 Exit.exitSuccess
-            else
-                putStrLn $ "Running program "++ (args !! 0)
+            else 
+                if length args >= 1 then do
+                    putStrLn $ "Running program "++ head args
+                    runFile $ head args
+                else do
+                    putStrLn "Usage: loxit <file.lox>"
+                    Exit.exitSuccess

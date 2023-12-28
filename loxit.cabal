@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
+      Error
       Lib
+      TokenTypes
   other-modules:
       Paths_loxit
   autogen-modules:
