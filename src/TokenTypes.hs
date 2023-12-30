@@ -49,5 +49,6 @@ module TokenTypes where
     data Token = Token {
         tokenType :: TokenType,
         lexeme    :: String,
-        lineinfo  :: LineInfo
+        st        :: Int,
+        len       :: Int
     } deriving (Show, Eq)
