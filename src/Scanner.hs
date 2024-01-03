@@ -50,20 +50,24 @@ module Scanner where
         if v then
             m_t
         else m_f
-
-    parse :: Parse a -> String -> Either ErrInfo a
-    parse parser initState =
-        case runParse parser (ParseState initState 0 0 0 []) of
+    
+    -- beauty of types
+    parse :: String -> Either ErrInfo [Token]
+    parse initState =
+        case runParse scanTokens (ParseState initState 0 0 1 []) of
             Left err          -> Left err
             Right (result, _) -> Right result
 
-    eofAdd :: Parse [Token]
-    eofAdd = ifM isAtEnd addeof next
+    scanTokens :: Parse [Token]
+    scanTokens = ifM isAtEnd addeof next
         where
             addeof = do
                 _  <- addToken EOF
                 tokens <$> getState
-            next   = 
+            next   = do
+                updateStart
+                _ <- scanTok
+                scanTokens
 
     updateStart :: Parse ()
     updateStart = do
@@ -94,14 +98,17 @@ module Scanner where
             do
                 incCurrent
                 return c
+    
+    peek :: Parse Char
+    peek = ifM isAtEnd (return '\0') (getState >>= \p ->  return (contents p !! current p))
 
     slice :: String -> Int -> Int -> String
-    slice s from to = take (to-from +1) (drop from s)
+    slice s from to = take (to-from) (drop from s)
 
     addToken :: TokenType -> Parse Token
     addToken tok = do
         p <- getState
-        let token = Token tok (slice (contents p) (start p) (current p -1)) (start p) (current p - start p) in
+        let token = Token tok (slice (contents p) (start p) (current p)) (start p) (current p - start p) in
             do
                 putState (p {tokens = token: tokens p})
                 return token
