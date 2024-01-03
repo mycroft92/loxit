@@ -57,6 +57,14 @@ module Scanner where
             Left err          -> Left err
             Right (result, _) -> Right result
 
+    eofAdd :: Parse [Token]
+    eofAdd = ifM isAtEnd addeof next
+        where
+            addeof = do
+                _  <- addToken EOF
+                tokens <$> getState
+            next   = 
+
     updateStart :: Parse ()
     updateStart = do
         p <- getState
@@ -94,8 +102,8 @@ module Scanner where
     addToken tok = do
         p <- getState
         let token = Token tok (slice (contents p) (start p) (current p -1)) (start p) (current p - start p) in
-            do 
-                putState (p {tokens = token: tokens p}) 
+            do
+                putState (p {tokens = token: tokens p})
                 return token
 
     -- might need peek and peekNext
