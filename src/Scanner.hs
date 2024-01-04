@@ -4,6 +4,7 @@ module Scanner where
     -- import Control.Applicative -- for Applicative instance
     import Control.Monad (liftM, ap) --for functor and applicative instances
     import qualified Data.Char as C
+    import qualified Data.Map as M
 
 
     data ParseState = ParseState {
@@ -12,7 +13,7 @@ module Scanner where
         current  :: Int,
         line     :: Int,
         tokens   :: [Token]
-    } deriving (Show)
+    } -- deriving (Show)
 
     newtype Parse a = Parse {
         runParse :: ParseState -> Either ErrInfo (a, ParseState)
@@ -50,8 +51,8 @@ module Scanner where
         if v then
             m_t
         else m_f
-    
-    -- beauty of types
+
+
     parse :: String -> Either ErrInfo [Token]
     parse initState =
         case runParse scanTokens (ParseState initState 0 0 1 []) of
@@ -63,7 +64,7 @@ module Scanner where
         where
             addeof = do
                 _  <- addToken EOF
-                tokens <$> getState
+                reverse . tokens <$> getState
             next   = do
                 updateStart
                 _ <- scanTok
@@ -98,7 +99,7 @@ module Scanner where
             do
                 incCurrent
                 return c
-    
+
     peek :: Parse Char
     peek = ifM isAtEnd (return '\0') (getState >>= \p ->  return (contents p !! current p))
 
@@ -129,3 +130,23 @@ module Scanner where
             ';' -> addToken SEMICOLON
             '/' -> addToken SLASH
             '*' -> addToken STAR
+
+    keywords :: M.Map String TokenType
+    keywords = M.fromList [("var", VAR),
+                ("while", WHILE),
+                ("and", AND),
+                ("class", CLASS),
+                ("else", ELSE),
+                ("false", FALSE),
+                ("fun", FUN),
+                ("for", FOR),
+                ("if", IF),
+                ("nil", NIL),
+                ("or", OR),
+                ("print", PRINT),
+                ("return", RETURN),
+                ("super", SUPER),
+                ("this", THIS),
+                ("true", TRUE),
+                ("var", VAR),
+                ("while", WHILE)]
