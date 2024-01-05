@@ -4,8 +4,8 @@ module Error where
     data ErrInfo  = ErrInfo LineInfo String deriving (Show, Eq)
 
     instance Show LineInfo where
-        show (LineCol l c s) = "line: " ++ show l ++ " col: "++ show c ++ " "++ s
-        show (Line l s)      = "line: " ++ show l ++ s
+        show (LineCol l c s) = "line: " ++ show l ++ " col: "  ++ show c ++ " file: "++ s
+        show (Line l s)      = "line: " ++ show l ++ " file: " ++ s
 
     makeErr :: String -> Int -> String -> ErrInfo
     makeErr fn l = ErrInfo (Line l fn)

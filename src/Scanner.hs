@@ -12,38 +12,60 @@ module Scanner where
         start    :: Int,
         current  :: Int,
         line     :: Int,
-        tokens   :: [Token]
+        tokens   :: [Token],
+        filename :: String
     } -- deriving (Show)
 
     newtype Parse a = Parse {
-        runParse :: ParseState -> Either ErrInfo (a, ParseState)
+        runParse :: ParseState -> (a, ParseState)
     }
 
+    newtype ParseRes a = Either ErrInfo (Parse a)
     -- scanTokens :: ParseState -> (a, ParseState)
     -- scanTokens = undefined
 
     identity :: a -> Parse a
-    identity a = Parse (\s -> Right (a, s))
+    identity a = Parse (\s -> (a, s))
+
+    identityRes :: a -> ParseRes a
+    identityRes = Right . identity
 
     getState :: Parse ParseState
-    getState = Parse (\s -> Right (s,s))
+    getState = Parse (\s -> (s,s))
+
+    -- getStateRes :: ParseRes ParseState
+    -- getStateRes = Right . getState
 
     putState :: ParseState -> Parse ()
-    putState s = Parse (\_ -> Right ((), s))
+    putState s = Parse (\_ -> ((), s))
 
     instance Functor Parse where
+        fmap = liftM
+    
+    instance Functor ParseRes where
         fmap = liftM
 
     instance Applicative Parse where
         pure    = identity
         (<*>)   = ap
 
+    instance Applicative ParseRes where
+        pure    = identityRes
+        (<*>)   = ap
+
     instance Monad Parse where
         return = pure
         m >>= g = Parse $ \x ->
-            case runParse m x of
-                Left err      -> Left err
-                Right (res,y) -> runParse (g res) y
+            let (res, st) = runParse m x in
+                runParse (g res) st
+
+    instance Monad ParseRes where
+        return = pure
+        m >>= g = case m of
+            Left err -> Left err
+            Right p  -> Right p
+
+    -- instance MonadFail Parse where
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
     ifM bt m_t m_f = do
@@ -53,11 +75,11 @@ module Scanner where
         else m_f
 
 
-    parse :: String -> Either ErrInfo [Token]
-    parse initState =
-        case runParse scanTokens (ParseState initState 0 0 1 []) of
-            Left err          -> Left err
-            Right (result, _) -> Right result
+    -- parse :: String -> String -> Either ErrInfo [Token]
+    -- parse initState fn =
+    --     case runParse scanTokens (ParseState initState 0 0 1 [] fn) of
+    --         Left err          -> Left err
+    --         Right (result, _) -> Right result
 
     scanTokens :: Parse [Token]
     scanTokens = ifM isAtEnd addeof next
@@ -130,6 +152,22 @@ module Scanner where
             ';' -> addToken SEMICOLON
             '/' -> addToken SLASH
             '*' -> addToken STAR
+            '!' -> ifM (checkNext '=') (read1 >>= \_ -> addToken BANG_EQUAL) (addToken BANG)
+            '=' -> ifM (checkNext '=') (read1 >>= \_ -> addToken EQUAL_EQUAL) (addToken EQUAL)
+            '>' -> ifM (checkNext '=') (read1 >>= \_ -> addToken GREATER_EQUAL) (addToken GREATER)
+            '<' -> ifM (checkNext '=') (read1 >>= \_ -> addToken LESS_EQUAL) (addToken LESS)
+            -- _   -> (\_ -> do 
+            --     p <- getState
+            --     Left $ makeErr (filename p) (line p) ("Illegal Character: "++[c]))
+
+    cond :: [(Bool, Parse Token)] -> Parse Token -> Parse Token
+    cond []    d      = d
+    cond ((c,p):xs) d = if c then p else cond xs d
+
+    checkNext :: Char -> Parse Bool
+    checkNext c = do
+        a <- peek
+        return (a == c)
 
     keywords :: M.Map String TokenType
     keywords = M.fromList [("var", VAR),
