@@ -1,5 +1,5 @@
 module TokenTypes where
-    import Error
+
     data TokenType
         = LEFT_PAREN
         | RIGHT_PAREN
@@ -42,9 +42,9 @@ module TokenTypes where
         | TRUE
         | VAR
         | WHILE
-        | EOF deriving (Show, Eq)
+        | EOF 
         -- -- Throwaway token for comment/whitespace
-        -- | WS
+        | WS deriving (Show, Eq)
 
     data Token = Token {
         tokenType :: TokenType,
@@ -52,3 +52,4 @@ module TokenTypes where
         st        :: Int,
         len       :: Int
     } deriving (Show, Eq)
+    
