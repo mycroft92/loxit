@@ -7,6 +7,7 @@ module Lib
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd, dropWhile)
 import System.IO
+import Scanner (parse)
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -15,7 +16,7 @@ trim = dropWhileEnd isSpace . dropWhile isSpace
 runFile :: String -> IO ()
 runFile s = do
     contents <- readFile s
-    run contents
+    run contents s
 
 runPrompt :: IO ()
 runPrompt = do
@@ -24,13 +25,13 @@ runPrompt = do
     if trim line == "" then
         return ()
     else do
-        run line
+        run line "interp"
         runPrompt
 
 
-run :: String -> IO ()
-run contents = do
-    let ls = lines contents in
-        mapM print ls
-    return ()
-    
+run :: String -> String -> IO ()
+run contents fn = do
+    let res = parse fn contents in
+        case res of
+            Left err -> print $ show err
+            Right result -> mapM print result >> return ()
