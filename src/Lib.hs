@@ -3,10 +3,10 @@ module Lib
       runPrompt,
       trim
     ) where
--- import Control.Monad (forever)
+
 import Data.Char (isSpace)
-import Data.List (dropWhileEnd, dropWhile)
-import System.IO
+import Data.List (dropWhileEnd)
+-- import System.IO
 import Scanner (parse)
 
 trim :: String -> String
@@ -20,7 +20,7 @@ runFile s = do
 
 runPrompt :: IO ()
 runPrompt = do
-    putStr "> " 
+    putStr "> "
     line <- getLine
     if trim line == "" then
         return ()
@@ -34,4 +34,4 @@ run contents fn = do
     let res = parse fn contents in
         case res of
             Left err -> print $ show err
-            Right result -> mapM print result >> return ()
+            Right result -> mapM_ print result

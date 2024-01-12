@@ -26,7 +26,9 @@ source-repository head
 library
   exposed-modules:
       Error
+      Expr
       Lib
+      Parser
       Scanner
       TokenTypes
   other-modules:
