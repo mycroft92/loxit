@@ -1,5 +1,5 @@
-module Scanner where
-    import TokenTypes
+module Scanner (parse) where
+    import TokenTypes ( Token(Token), TokenType(..) )
     import Error ( ErrInfo, makeErr )
     -- import Control.Applicative -- for Applicative instance
     import Control.Monad (liftM, ap, when) --for functor and applicative instances
@@ -7,7 +7,7 @@ module Scanner where
     import qualified Data.Map as M
 
 
-    data ParseState = ParseState {
+    data ScanState = ScanState {
         contents :: String,
         start    :: Int,
         current  :: Int,
@@ -16,42 +16,42 @@ module Scanner where
         filename :: String
     } -- deriving (Show)
 
-    instance Show ParseState where
-        show (ParseState _ _ c l toks fn) =
+    instance Show ScanState where
+        show (ScanState _ _ c l toks fn) =
             "filename: "++fn++"\n"++"index: "++ show l++"\n" ++ "current: "++ show c ++ "\n"++ concatMap (\t -> show t ++ "\n") toks
 
-    newtype Parse a = Parse {
-        runParse :: ParseState -> Either ErrInfo (a, ParseState)
+    newtype Lexer a = Lexer {
+        runLexer :: ScanState -> Either ErrInfo (a, ScanState)
     }
 
-    -- scanTokens :: ParseState -> (a, ParseState)
+    -- scanTokens :: ScanState -> (a, ScanState)
     -- scanTokens = undefined
 
-    identity :: a -> Parse a
-    identity a = Parse (\s -> Right (a, s))
+    identity :: a -> Lexer a
+    identity a = Lexer (\s -> Right (a, s))
 
-    getState :: Parse ParseState
-    getState = Parse (\s -> Right (s,s))
+    getState :: Lexer ScanState
+    getState = Lexer (\s -> Right (s,s))
 
-    putState :: ParseState -> Parse ()
-    putState s = Parse (\_ -> Right ((), s))
+    putState :: ScanState -> Lexer ()
+    putState s = Lexer (\_ -> Right ((), s))
 
-    bail :: String -> Parse a
-    bail err = Parse $ \s -> Left (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
+    bail :: String -> Lexer a
+    bail err = Lexer $ \s -> Left (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
 
-    instance Functor Parse where
+    instance Functor Lexer where
         fmap = liftM
 
-    instance Applicative Parse where
+    instance Applicative Lexer where
         pure    = identity
         (<*>)   = ap
 
-    instance Monad Parse where
+    instance Monad Lexer where
         return = pure
-        m >>= g = Parse $ \x ->
-            case runParse m x of
+        m >>= g = Lexer $ \x ->
+            case runLexer m x of
                 Left err      -> Left err
-                Right (res,y) -> runParse (g res) y
+                Right (res,y) -> runLexer (g res) y
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
     ifM bt m_t m_f = do
@@ -63,11 +63,11 @@ module Scanner where
 
     parse :: String -> String -> Either ErrInfo [Token]
     parse fn initState =
-        case runParse scanTokens (ParseState initState 0 0 1 [] fn) of
+        case runLexer scanTokens (ScanState initState 0 0 1 [] fn) of
             Left err          -> Left err
             Right (result, _) -> Right result
 
-    scanTokens :: Parse [Token]
+    scanTokens :: Lexer [Token]
     scanTokens = ifM isAtEnd addeof next
         where
             addeof = do
@@ -79,21 +79,21 @@ module Scanner where
                 _ <- scanTok
                 scanTokens
 
-    updateStart :: Parse ()
+    updateStart :: Lexer ()
     updateStart = do
         p <- getState
         putState (p {start = current p})
 
-    incLine :: Parse ()
+    incLine :: Lexer ()
     incLine = do
         p <- getState
         putState (p {line = line p + 1})
 
-    incCurrent :: Parse ()
+    incCurrent :: Lexer ()
     incCurrent = getState >>= \p ->
         putState (p {current = current p +1})
 
-    isAtEnd :: Parse Bool
+    isAtEnd :: Lexer Bool
     isAtEnd = do
         p <- getState
         if current p >= length (contents p) then
@@ -101,7 +101,7 @@ module Scanner where
         else
             return False
 
-    read1 :: Parse Char
+    read1 :: Lexer Char
     read1 = do
         p <- getState
         let c = contents p !! current p in
@@ -109,13 +109,13 @@ module Scanner where
                 incCurrent
                 return c
 
-    peek :: Parse Char
+    peek :: Lexer Char
     peek = ifM isAtEnd (return '\0') (getState >>= \p ->  return (contents p !! current p))
 
     slice :: String -> Int -> Int -> String
     slice s from to = take (to-from) (drop from s)
 
-    addToken :: TokenType -> Parse Token
+    addToken :: TokenType -> Lexer Token
     addToken tok = do
         p <- getState
         let token = Token tok (slice (contents p) (start p) (current p)) (start p) (current p - start p) in
@@ -124,7 +124,7 @@ module Scanner where
                 return token
 
     -- might need peek and peekNext
-    scanTok :: Parse Token
+    scanTok :: Lexer Token
     scanTok = do
         c <- read1
         case c of
@@ -153,7 +153,7 @@ module Scanner where
             _    -> cond [(C.isAlpha c, identifier),
                             (C.isDigit c, number)] (bail $ "Illegal char \'"++[c]++"\'")
 
-    identifier :: Parse Token
+    identifier :: Lexer Token
     identifier = scanWhile C.isAlphaNum >> do
         st <- getState
         let s = slice (contents st) (start st) (current st) in
@@ -161,7 +161,7 @@ module Scanner where
                 Just x  -> addToken x
                 Nothing -> addToken IDENT
 
-    number :: Parse Token
+    number :: Lexer Token
     number = readNum1 >> addToken NUMBER
         where
             readNum1 = do
@@ -179,7 +179,7 @@ module Scanner where
                     readNum2
 
     -- this function assumes that the first caharacter is already parsed as '"'
-    string :: Parse String
+    string :: Lexer String
     string = ifM isAtEnd (bail "Unterminated String") (do
         ch <- peek
         if ch == '\n' then do
@@ -200,7 +200,7 @@ module Scanner where
     throwaway = Token WS "" 0 0
 
 
-    scanWhile :: (Char -> Bool) -> Parse String
+    scanWhile :: (Char -> Bool) -> Lexer String
     scanWhile check = do
         ch <- peek
         if check ch
@@ -211,11 +211,11 @@ module Scanner where
             else return ""
         -- when (check ch) $ read1 >> scanWhile check
 
-    cond :: [(Bool, Parse Token)] -> Parse Token -> Parse Token
+    cond :: [(Bool, Lexer Token)] -> Lexer Token -> Lexer Token
     cond []    d      = d -- default action
     cond ((c,p):xs) d = if c then p else cond xs d
 
-    checkNext :: Char -> Parse Bool
+    checkNext :: Char -> Lexer Bool
     -- Checks if the next character in the buffer is c
     checkNext c = do
         a <- peek
