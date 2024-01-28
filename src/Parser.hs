@@ -26,47 +26,30 @@ module Parser where
     expression :: Parser Expr
     expression = equality
 
+    -- Common function to parse binary expressions
+    binexp :: Parser Expr -> [TokenType] -> (Expr -> Token -> Expr -> Expr) -> Parser Expr
+    binexp next ts constr = do
+        expr <- next
+        read_loop expr
+        where
+            read_loop ex = ifM (match ts) (do
+                tok <- previous
+                ex2 <- next
+                read_loop $ constr ex tok ex2) (return ex)
+
     -- parses a == b != c form of expressions too.
     equality :: Parser Expr
-    equality = do
-        expr <- comparison
-        read_loop expr
-        where
-            read_loop ex = ifM (match [BANG_EQUAL, EQUAL_EQUAL]) (do
-                tok  <- previous
-                ex2  <- comparison
-                read_loop $ Log ex tok ex2) (return ex)
-
+    equality  = binexp comparison [BANG_EQUAL, EQUAL_EQUAL] Log
+    
 
     comparison :: Parser Expr
-    comparison = do
-        trm <- term
-        read_loop trm
-        where
-            read_loop trm = ifM (match [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL]) (do
-                tok <- previous
-                ex2 <- term
-                read_loop $ Log trm tok ex2) (return trm)
+    comparison = binexp term [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] Log
 
     term :: Parser Expr
-    term = do
-        expr <- factor
-        read_loop expr
-        where
-            read_loop trm = ifM (match [MINUS, PLUS]) (do
-                tok <- previous
-                ex2 <- factor
-                read_loop $ Binary trm tok ex2) (return trm)
+    term = binexp factor [MINUS, PLUS] Binary
 
     factor :: Parser Expr
-    factor = do
-        expr <- unary
-        read_loop expr
-        where
-            read_loop fac = ifM (match [SLASH, STAR]) (do
-                tok <- previous
-                ex2 <- unary
-                read_loop $ Binary fac tok ex2) (return fac)
+    factor = binexp unary [SLASH, STAR] Binary
 
     unary :: Parser Expr
     unary = ifM (match [BANG, MINUS]) (do
