@@ -12,3 +12,5 @@ module Error where
 
     makeErrCol :: String -> Int -> Int -> String -> ErrInfo
     makeErrCol fn l c = ErrInfo (LineCol l c fn)
+
+    data ParserErr = RuntimeException String | ParseErr String deriving (Show, Eq)

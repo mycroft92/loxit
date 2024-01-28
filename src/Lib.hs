@@ -7,7 +7,8 @@ module Lib
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd)
 -- import System.IO
-import Scanner (parse)
+import qualified Scanner  as S
+import qualified Parser as P
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -31,7 +32,8 @@ runPrompt = do
 
 run :: String -> String -> IO ()
 run contents fn = do
-    let res = parse fn contents in
+    let res = S.parse fn contents in
         case res of
             Left err -> print $ show err
-            Right result -> mapM_ print result
+            Right result -> -- mapM_ print result
+                print $ P.parse result

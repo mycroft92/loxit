@@ -1,11 +1,12 @@
 module Parser where
 
-    import TokenTypes ( Token (tokenType), makeEOF, TokenType (BANG_EQUAL, EQUAL_EQUAL)  )
-    import Error (ErrInfo)
+    import TokenTypes ( Token (tokenType, lexeme), makeEOF, TokenType (..)  )
+    -- import Error (ErrInfo)
     import Expr
     import Control.Monad
     import Control.Monad.State
-    import Control.Monad.Except
+    import Control.Monad.Except ( ExceptT(..), runExceptT ) 
+
 
 
     data ParserState = ParserState {
@@ -13,8 +14,17 @@ module Parser where
         index :: Int
     } deriving (Show, Eq)
 
-    type Parser a = ExceptT ErrInfo (State ParserState) a
+    type Parser a = ExceptT String (State ParserState) a
     -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
+
+    parse :: [Token] -> Either String Expr
+    parse ls = 
+        case runState (runExceptT expression) (ParserState ls 0) of
+            (Left err,_) -> Left err
+            (Right x,_)  -> Right x
+
+    expression :: Parser Expr
+    expression = equality
 
     -- parses a == b != c form of expressions too.
     equality :: Parser Expr
@@ -24,12 +34,66 @@ module Parser where
         where
             read_loop ex = ifM (match [BANG_EQUAL, EQUAL_EQUAL]) (do
                 tok  <- previous
-                Log ex tok <$> equality) (return ex)
-
+                ex2  <- comparison
+                read_loop $ Log ex tok ex2) (return ex)
 
 
     comparison :: Parser Expr
-    comparison = undefined
+    comparison = do
+        trm <- term
+        read_loop trm
+        where
+            read_loop trm = ifM (match [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL]) (do
+                tok <- previous
+                ex2 <- term
+                read_loop $ Log trm tok ex2) (return trm)
+
+    term :: Parser Expr
+    term = do
+        expr <- factor
+        read_loop expr
+        where
+            read_loop trm = ifM (match [MINUS, PLUS]) (do
+                tok <- previous
+                ex2 <- factor
+                read_loop $ Binary trm tok ex2) (return trm)
+
+    factor :: Parser Expr
+    factor = do
+        expr <- unary
+        read_loop expr
+        where
+            read_loop fac = ifM (match [SLASH, STAR]) (do
+                tok <- previous
+                ex2 <- unary
+                read_loop $ Binary fac tok ex2) (return fac)
+
+    unary :: Parser Expr
+    unary = ifM (match [BANG, MINUS]) (do
+        op    <- previous
+        Unary op <$> unary) primary
+
+    primary :: Parser Expr
+    primary = do
+        st <- peek
+        let tt = tokenType st in
+            case tt of
+                FALSE  -> do { incPointer; return $ Literal $ Bool False}
+                TRUE   -> do { incPointer; return $ Literal $ Bool True}
+                NIL    -> do { incPointer; return $ Literal   Nil}
+                NUMBER -> do { incPointer; return $ Literal $ Number $ read (lexeme st)}
+                STRING -> do { incPointer; return $ Literal $ String $ lexeme st}
+                LEFT_PAREN -> do
+                    _    <- incPointer
+                    expr <- expression
+                    _    <- consume RIGHT_PAREN $ "Expected ')' after expression: "++ show expr
+                    return $ Group expr
+                _      -> ExceptT . return . Left $ "Expected Expression: `"++ show st ++ "`."
+            
+
+    consume :: TokenType -> String -> Parser ()
+    consume t s = ifM (match [t]) (return ()) (ExceptT . return $ Left s)
+
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
     ifM bt m_t m_f = do
@@ -72,4 +136,21 @@ module Parser where
                     return True
             else match xs
 
-    
+    synchronize :: Parser ()
+    synchronize = do
+        incPointer
+        x <- previous 
+        if tokenType x == SEMICOLON then 
+            return ()
+        else ifM isAtEnd (return ()) (do
+            tt <- peek
+            case tokenType tt of
+                CLASS  -> return ()
+                FUN    -> return ()
+                VAR    -> return ()
+                FOR    -> return ()
+                IF     -> return ()
+                WHILE  -> return ()
+                PRINT  -> return ()
+                RETURN -> return ()
+                _ -> synchronize)
