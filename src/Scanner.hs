@@ -101,6 +101,7 @@ module Scanner (parse) where
         else
             return False
 
+    -- in the book this is called the advance method
     read1 :: Lexer Char
     read1 = do
         p <- getState
@@ -123,7 +124,6 @@ module Scanner (parse) where
                 putState (p {tokens = token: tokens p})
                 return token
 
-    -- might need peek and peekNext
     scanTok :: Lexer Token
     scanTok = do
         c <- read1
