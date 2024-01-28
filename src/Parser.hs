@@ -3,7 +3,7 @@ module Parser where
     import TokenTypes ( Token (tokenType, lexeme), makeEOF, TokenType (..)  )
     -- import Error (ErrInfo)
     import Expr
-    import Control.Monad
+    -- import Control.Monad
     import Control.Monad.State
     import Control.Monad.Except ( ExceptT(..), runExceptT ) 
 
