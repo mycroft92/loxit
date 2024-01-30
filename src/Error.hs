@@ -1,5 +1,5 @@
 module Error where
-
+    import TokenTypes (Token)
     data LineInfo = LineCol Int Int String | Line Int String deriving (Eq)
     data ErrInfo  = ErrInfo LineInfo String deriving (Show, Eq)
 
@@ -13,4 +13,7 @@ module Error where
     makeErrCol :: String -> Int -> Int -> String -> ErrInfo
     makeErrCol fn l c = ErrInfo (LineCol l c fn)
 
-    data ParserErr = RuntimeException String | ParseErr String deriving (Show, Eq)
+    data InterpreterError = 
+        Unexpected 
+        | RuntimeError String 
+        | InterpreterError Token String deriving (Show, Eq)

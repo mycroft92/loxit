@@ -7,8 +7,10 @@ module Lib
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd)
 -- import System.IO
+import Expr
 import qualified Scanner  as S
 import qualified Parser as P
+import Evaluator
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -35,5 +37,15 @@ run contents fn = do
     let res = S.parse fn contents in
         case res of
             Left err -> print $ show err
-            Right result -> -- mapM_ print result
-                print $ P.parse result
+            Right result -> -- mapM_ print result, tokenizer result
+                do
+                    let parseres = P.parse result in
+                        case parseres of
+                            Left err -> print err
+                            Right expr ->
+                                do
+                                    x <- runInterpreter expr
+                                    process x
+    where 
+        process (Left e) = print e
+        process (Right x) = print x

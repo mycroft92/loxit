@@ -1,7 +1,7 @@
 module Expr where
     import TokenTypes (Token)
 
-    data Lit = 
+    data Value = 
         Number Double
         | String String
         | Bool Bool
@@ -12,9 +12,11 @@ module Expr where
         Binary Expr Token Expr
         | Log  Expr Token Expr
         | Unary Token Expr
-        | Literal Lit
+        | Literal Value
         | Var Token
         | This
         | Super     
         | Group Expr deriving (Eq, Show)
         
+
+    
