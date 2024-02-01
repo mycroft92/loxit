@@ -39,6 +39,19 @@ module Evaluator where
             mult (Number x) (Number y) = return $ Number (x*y)
             mult x y = raiseError $ RuntimeError $ "Undefined operation * on: "++show x ++ ","++show y
     evaluate (Group expr) = evaluate expr
+    evaluate (Unary tok expr) = do
+        case tokenType tok of
+            MINUS -> do
+                v <- evaluate expr
+                case v of
+                    Number x -> return $ Number (- x)
+                    _ -> raiseError $ RuntimeError $ "Undefined operation - on: "++ show expr 
+            BANG -> do
+                v <- evaluate expr
+                case v of
+                    Bool b -> return $ Bool (not b)
+                    _      -> raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
+            _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr 
     evaluate _ = undefined
 
     raiseError :: InterpreterError -> Interpreter Value
