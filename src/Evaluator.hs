@@ -38,7 +38,7 @@ module Evaluator where
 
             mult (Number x) (Number y) = return $ Number (x*y)
             mult x y = raiseError $ RuntimeError $ "Undefined operation * on: "++show x ++ ","++show y
-
+    evaluate (Group expr) = evaluate expr
     evaluate _ = undefined
 
     raiseError :: InterpreterError -> Interpreter Value
