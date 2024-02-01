@@ -48,9 +48,10 @@ module Evaluator where
                     _ -> raiseError $ RuntimeError $ "Undefined operation - on: "++ show expr 
             BANG -> do
                 v <- evaluate expr
-                case v of
+                case v of --ruby style for bang conversion
                     Bool b -> return $ Bool (not b)
-                    _      -> raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
+                    Nil    -> return $ Bool False
+                    _      -> return $ Bool True --raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
             _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr 
     evaluate _ = undefined
 
