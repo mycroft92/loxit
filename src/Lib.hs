@@ -7,8 +7,7 @@ module Lib
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd)
 -- import System.IO
-import Expr
-import Error
+
 import qualified Scanner  as S
 import qualified Parser as P
 import Evaluator (runInterpreter)
