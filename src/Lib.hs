@@ -11,7 +11,6 @@ import Expr
 import Error
 import qualified Scanner  as S
 import qualified Parser as P
-import Evaluator
 import Evaluator (runInterpreter)
 
 trim :: String -> String
