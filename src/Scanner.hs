@@ -1,6 +1,6 @@
 module Scanner (parse) where
     import TokenTypes ( Token(Token), TokenType(..) )
-    import Error ( ErrInfo, makeErr )
+    import Error ( InterpreterError(ScannerError), makeErr )
     -- import Control.Applicative -- for Applicative instance
     import Control.Monad (liftM, ap, when) --for functor and applicative instances
     import qualified Data.Char as C
@@ -21,7 +21,7 @@ module Scanner (parse) where
             "filename: "++fn++"\n"++"index: "++ show l++"\n" ++ "current: "++ show c ++ "\n"++ concatMap (\t -> show t ++ "\n") toks
 
     newtype Lexer a = Lexer {
-        runLexer :: ScanState -> Either ErrInfo (a, ScanState)
+        runLexer :: ScanState -> Either InterpreterError (a, ScanState)
     }
 
     -- scanTokens :: ScanState -> (a, ScanState)
@@ -37,7 +37,7 @@ module Scanner (parse) where
     putState s = Lexer (\_ -> Right ((), s))
 
     bail :: String -> Lexer a
-    bail err = Lexer $ \s -> Left (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
+    bail err = Lexer $ \s -> Left $ ScannerError (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
 
     instance Functor Lexer where
         fmap = liftM
@@ -61,7 +61,7 @@ module Scanner (parse) where
         else m_f
 
 
-    parse :: String -> String -> Either ErrInfo [Token]
+    parse :: String -> String -> Either InterpreterError [Token]
     parse fn initState =
         case runLexer scanTokens (ScanState initState 0 0 1 [] fn) of
             Left err          -> Left err

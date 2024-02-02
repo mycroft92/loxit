@@ -16,4 +16,6 @@ module Error where
     data InterpreterError = 
         Unexpected 
         | RuntimeError String 
+        | ParserError String
+        | ScannerError ErrInfo
         | InterpreterError Token String deriving (Show, Eq)

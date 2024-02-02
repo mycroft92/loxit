@@ -14,6 +14,21 @@ module Evaluator where
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
+    evaluate (Log ex1 tok ex2) = do
+        l <- evaluate ex1
+        r <- evaluate ex2
+        case tokenType tok of
+            GREATER    -> matchOp (>) l r
+            GREATER_EQUAL -> matchOp (>=) l r
+            LESS        -> matchOp (<) l r
+            LESS_EQUAL  -> matchOp (<=) l r
+            EQUAL_EQUAL -> return $ Bool $ l==r
+            BANG_EQUAL  -> return $ Bool $ l/=r
+            _           -> raiseError Unexpected
+        where
+            matchOp f (Number x) (Number y) = return $ Bool (f x y)
+            matchOp _ x y = raiseError $ RuntimeError $ "Illegal comparison op on: "++show x ++ " "++show y 
+        
     evaluate (Binary ex1 tok ex2) = do
         l <- evaluate ex1
         r <- evaluate ex2

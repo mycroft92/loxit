@@ -1,7 +1,7 @@
 module Parser where
 
     import TokenTypes ( Token (tokenType, lexeme), makeEOF, TokenType (..)  )
-    -- import Error (ErrInfo)
+    import Error 
     import Expr
     -- import Control.Monad
     import Control.Monad.State
@@ -14,10 +14,10 @@ module Parser where
         index :: Int
     } deriving (Show, Eq)
 
-    type Parser a = ExceptT String (State ParserState) a
+    type Parser a = ExceptT InterpreterError (State ParserState) a
     -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
 
-    parse :: [Token] -> Either String Expr
+    parse :: [Token] -> Either InterpreterError Expr
     parse ls = 
         case runState (runExceptT expression) (ParserState ls 0) of
             (Left err,_) -> Left err
@@ -71,11 +71,11 @@ module Parser where
                     expr <- expression
                     _    <- consume RIGHT_PAREN $ "Expected ')' after expression: "++ show expr
                     return $ Group expr
-                _      -> ExceptT . return . Left $ "Expected Expression: `"++ show st ++ "`."
+                _      -> ExceptT . return . Left $ ParserError $ "Expected Expression: `"++ show st ++ "`."
             
 
     consume :: TokenType -> String -> Parser ()
-    consume t s = ifM (match [t]) (return ()) (ExceptT . return $ Left s)
+    consume t s = ifM (match [t]) (return ()) (ExceptT . return $ Left $ ParserError s)
 
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a

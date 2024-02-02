@@ -15,7 +15,7 @@ main = do
         if null args
             then do
                 putStrLn "Interpreter mode:"
-                hSetBuffering stdin NoBuffering
+                -- hSetBuffering stdin NoBuffering
                 hSetBuffering stdout NoBuffering
                 runPrompt
                 Exit.exitSuccess
