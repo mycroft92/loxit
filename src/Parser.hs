@@ -5,7 +5,7 @@ module Parser where
     import Expr
     -- import Control.Monad
     import Control.Monad.State
-    import Control.Monad.Except ( ExceptT(..), runExceptT ) 
+    import Control.Monad.Except ( ExceptT(..), runExceptT, throwError) 
 
 
 
@@ -71,11 +71,11 @@ module Parser where
                     expr <- expression
                     _    <- consume RIGHT_PAREN $ "Expected ')' after expression: "++ show expr
                     return $ Group expr
-                _      -> ExceptT . return . Left $ ParserError $ "Expected Expression: `"++ show st ++ "`."
+                _      -> throwError $ ParserError $ "Expected Expression: `"++ show st ++ "`."
             
 
     consume :: TokenType -> String -> Parser ()
-    consume t s = ifM (match [t]) (return ()) (ExceptT . return $ Left $ ParserError s)
+    consume t s = ifM (match [t]) (return ()) (throwError $ ParserError s)
 
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
