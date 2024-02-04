@@ -16,7 +16,7 @@ trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
 
 
-runFile :: String -> IO ()
+runFile :: String -> IO Int
 runFile s = do
     contents <- readFile s
     run contents s
@@ -28,18 +28,22 @@ runPrompt = do
     if trim line == "" then
         return ()
     else do
-        run line "interp"
+        _ <- run line "interp"
         runPrompt
 
-run :: String -> String -> IO ()
+run :: String -> String -> IO Int
 run contents fn = handler $ do --This is an either monad
     res <- S.parse fn contents
     P.parse res
     where --IO monad comes here
-        handler (Left e)     = print e
+        handler (Left e)     = print e >> return 1
         handler (Right expr) = do 
             x <- runInterpreter expr
             print x
+            case x of
+                Left _ -> return 1
+                _ -> return 0
+
     
 
 -- run :: String -> String -> IO ()

@@ -23,6 +23,15 @@ module Parser where
             (Left err,_) -> Left err
             (Right x,_)  -> Right x
 
+    statements :: Parser [Expr]
+    statements = ifM isAtEnd (return []) (do
+        x  <- statement
+        xs <- statements
+        return (x:xs) )
+    
+    statement :: Parser Expr
+    statement = undefined
+
     expression :: Parser Expr
     expression = equality
 

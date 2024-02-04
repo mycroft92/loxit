@@ -19,10 +19,13 @@ main = do
                 hSetBuffering stdout NoBuffering
                 runPrompt
                 Exit.exitSuccess
-            else 
-                if length args >= 1 then do
+            else
+                if not (null args) then do
                     putStrLn $ "Running program "++ head args
-                    runFile $ head args
+                    x <- runFile $ head args
+                    if x == 0 
+                        then Exit.exitSuccess 
+                        else Exit.exitFailure
                 else do
                     putStrLn "Usage: loxit <file.lox>"
                     Exit.exitSuccess
