@@ -21,6 +21,12 @@ module Expr where
     data Stmt = 
         Expression Expr
         | Print Expr deriving (Eq, Show)
+
+    data Decl =
+        Statement Stmt
+        | Decl VarDecl deriving (Eq, Show)
+
+    data VarDecl = OnlyDecl Token | DeclE Token Expr deriving (Show, Eq) 
     
     instance Show Value where
         show (Number x) = show x

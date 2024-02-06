@@ -5,29 +5,43 @@ module Parser where
     import Expr
     -- import Control.Monad
     import Control.Monad.State
-    import Control.Monad.Except ( ExceptT(..), runExceptT, throwError) 
+    import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError) 
 
 
 
     data ParserState = ParserState {
-        tokens:: [Token],
-        index :: Int
+        tokens :: [Token],
+        index  :: Int
     } deriving (Show, Eq)
 
     type Parser a = ExceptT InterpreterError (State ParserState) a
     -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
 
-    parse :: [Token] -> Either InterpreterError [Stmt]
+    parse :: [Token] -> Either InterpreterError [Decl]
     parse ls = 
-        case runState (runExceptT statements) (ParserState ls 0) of
+        case runState (runExceptT declarations) (ParserState ls 0) of
             (Left err,_) -> Left err
             (Right x,_)  -> Right x
 
-    statements :: Parser [Stmt]
-    statements = ifM isAtEnd (return []) (do
-        x  <- statement
-        xs <- statements
+    declarations :: Parser [Decl]
+    declarations = ifM isAtEnd (return []) (do
+        x  <- declaration
+        xs <- declarations
         return (x:xs) )
+
+    declaration :: Parser Decl
+    declaration = catchError par (\e -> Statement . Expression . Literal <$> synchronize)
+        where par = ifM (match [VAR]) (Decl <$> varDecl) (Statement <$> statement)
+
+    varDecl :: Parser VarDecl
+    varDecl = undefined
+
+
+    -- statements :: Parser [Stmt]
+    -- statements = ifM isAtEnd (return []) (do
+    --     x  <- statement
+    --     xs <- statements
+    --     return (x:xs) )
     
     statement :: Parser Stmt
     statement = ifM (match [PRINT]) printStmt exprStmt
@@ -90,6 +104,7 @@ module Parser where
                 NIL    -> do { incPointer; return $ Literal   Nil}
                 NUMBER -> do { incPointer; return $ Literal $ Number $ read (lexeme st)}
                 STRING -> do { incPointer; return $ Literal $ String $ lexeme st}
+                IDENT  -> do { incPointer; return $ Var st}
                 LEFT_PAREN -> do
                     _    <- incPointer
                     expr <- expression
@@ -125,7 +140,7 @@ module Parser where
         
 
     incPointer :: Parser ()
-    incPointer = lift get >>= \p -> lift $ put (p {index = index p +1})
+    incPointer = ifM isAtEnd (return ()) (lift get >>= \p -> lift $ put (p {index = index p +1}))
 
     readToken :: Parser Token
     readToken = do
@@ -149,21 +164,21 @@ module Parser where
                     return True
             else match xs
 
-    synchronize :: Parser ()
+    synchronize :: Parser Value
     synchronize = do
         incPointer
         x <- previous 
         if tokenType x == SEMICOLON then 
-            return ()
-        else ifM isAtEnd (return ()) (do
+            return Nil
+        else ifM isAtEnd (return Nil) (do
             tt <- peek
             case tokenType tt of
-                CLASS  -> return ()
-                FUN    -> return ()
-                VAR    -> return ()
-                FOR    -> return ()
-                IF     -> return ()
-                WHILE  -> return ()
-                PRINT  -> return ()
-                RETURN -> return ()
+                CLASS  -> return Nil
+                FUN    -> return Nil
+                VAR    -> return Nil
+                FOR    -> return Nil
+                IF     -> return Nil
+                WHILE  -> return Nil
+                PRINT  -> return Nil
+                RETURN -> return Nil
                 _ -> synchronize)
