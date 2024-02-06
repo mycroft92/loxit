@@ -6,6 +6,7 @@ module Evaluator where
     import Control.Monad.Except
 
     
+    
     data InterpreterState = InterpreterState {
 
     }
@@ -22,7 +23,14 @@ module Evaluator where
 
     declEval :: Decl -> Interpreter Value
     declEval (Statement s) = stmtEval s
-    declEval (Decl v)   = undefined
+    declEval (Decl v)   = declarationEval v
+
+    declarationEval :: VarDecl -> Interpreter Value
+    declarationEval (OnlyDecl v) = do
+        _ <- liftIO $ print $ "var "++ show v
+        return Nil
+    
+    declarationEval (DeclE x e) = undefined
 
     stmtEval :: Stmt -> Interpreter Value
     stmtEval (Print e) = do

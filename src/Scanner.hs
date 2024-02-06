@@ -1,5 +1,5 @@
 module Scanner (parse) where
-    import TokenTypes ( Token(Token), TokenType(..) )
+    import TokenTypes ( Token(Token), TokenType(..), makeEOF )
     import Error ( InterpreterError(ScannerError), makeErr )
     -- import Control.Applicative -- for Applicative instance
     import Control.Monad (liftM, ap, when) --for functor and applicative instances
@@ -13,11 +13,12 @@ module Scanner (parse) where
         current  :: Int,
         line     :: Int,
         tokens   :: [Token],
-        filename :: String
+        filename :: String,
+        errors   :: [InterpreterError]
     } -- deriving (Show)
 
     instance Show ScanState where
-        show (ScanState _ _ c l toks fn) =
+        show (ScanState _ _ c l toks fn _) =
             "filename: "++fn++"\n"++"index: "++ show l++"\n" ++ "current: "++ show c ++ "\n"++ concatMap (\t -> show t ++ "\n") toks
 
     newtype Lexer a = Lexer {
@@ -36,8 +37,15 @@ module Scanner (parse) where
     putState :: ScanState -> Lexer ()
     putState s = Lexer (\_ -> Right ((), s))
 
-    bail :: String -> Lexer a
-    bail err = Lexer $ \s -> Left $ ScannerError (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
+    -- doing throw catch with custom implementation
+    bail :: String -> Lexer a --works like throwError
+    bail err = Lexer $ \s -> Left  $ ScannerError (makeErr (filename s) (line s) $ err ++ "\n buffer: \'" ++slice (contents s) (start s) (current s)++"\'")
+
+    mycatch :: Lexer a -> (InterpreterError -> Lexer a) -> Lexer a
+    mycatch m f = Lexer $ \s ->
+        case runLexer m s of
+            Left err -> runLexer (f err) s
+            Right (x,st) -> Right (x,st)
 
     instance Functor Lexer where
         fmap = liftM
@@ -61,11 +69,15 @@ module Scanner (parse) where
         else m_f
 
 
-    parse :: String -> String -> Either InterpreterError [Token]
+    parse :: String -> String -> Either [InterpreterError] [Token]
     parse fn initState =
-        case runLexer scanTokens (ScanState initState 0 0 1 [] fn) of
-            Left err          -> Left err
-            Right (result, _) -> Right result
+        case runLexer scanTokens (ScanState initState 0 0 1 [] fn []) of
+            Left err          -> Left [err]
+            Right (result, s) -> handle result s
+        where 
+            handle r s
+                | not (null (errors s)) = Left (errors s)
+                | otherwise = Right r
 
     scanTokens :: Lexer [Token]
     scanTokens = ifM isAtEnd addeof next
@@ -76,7 +88,12 @@ module Scanner (parse) where
                 reverse . tokens <$> getState
             next   = do
                 updateStart -- we only update start when scanning a new token
-                _ <- scanTok
+                _ <- mycatch scanTok (\e -> do
+                    x <- getState
+                    putState (x {errors= e: errors x})
+                    incCurrent -- skip the illegal char
+                    return makeEOF
+                    )
                 scanTokens
 
     updateStart :: Lexer ()

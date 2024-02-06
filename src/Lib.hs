@@ -36,7 +36,7 @@ run contents fn = handler $ do --This is an either monad
     res <- S.parse fn contents
     P.parse res
     where --IO monad comes here
-        handler (Left e)     = print e >> return 1
+        handler (Left es)     = mapM_ print es >> return 1
         handler (Right expr) = do 
             x <- runInterpreter expr
             print x

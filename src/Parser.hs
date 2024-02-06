@@ -1,27 +1,33 @@
 module Parser where
 
-    import TokenTypes ( Token (tokenType, lexeme), makeEOF, TokenType (..)  )
-    import Error 
+    import TokenTypes ( Token (tokenType, lexeme), TokenType (..)  )
+    import Error
     import Expr
     -- import Control.Monad
     import Control.Monad.State
-    import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError) 
+    import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
+
 
 
 
     data ParserState = ParserState {
         tokens :: [Token],
-        index  :: Int
+        index  :: Int,
+        errors :: [InterpreterError]
     } deriving (Show, Eq)
 
     type Parser a = ExceptT InterpreterError (State ParserState) a
     -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
 
-    parse :: [Token] -> Either InterpreterError [Decl]
-    parse ls = 
-        case runState (runExceptT declarations) (ParserState ls 0) of
-            (Left err,_) -> Left err
-            (Right x,_)  -> Right x
+    parse :: [Token] -> Either [InterpreterError] [Decl]
+    parse ls =
+        case runState (runExceptT declarations) (ParserState ls 0 []) of
+            (Left err,_) -> Left [err]
+            (Right x,s)  -> handle x s
+        where
+            handle x s
+                | not (null (errors s)) = Left $ errors s
+                | otherwise = Right x
 
     declarations :: Parser [Decl]
     declarations = ifM isAtEnd (return []) (do
@@ -30,11 +36,20 @@ module Parser where
         return (x:xs) )
 
     declaration :: Parser Decl
-    declaration = catchError par (\e -> Statement . Expression . Literal <$> synchronize)
+    declaration = catchError par (\e -> addError e >> Statement . Expression . Literal <$> synchronize)
         where par = ifM (match [VAR]) (Decl <$> varDecl) (Statement <$> statement)
 
     varDecl :: Parser VarDecl
-    varDecl = undefined
+    varDecl = do
+        x <- varDecl'
+        _ <- consume SEMICOLON "Expected ';' after var decl and before: "
+        return x
+
+    varDecl' :: Parser VarDecl
+    varDecl' = do
+        x <- consume IDENT "Expected variable name"
+        ifM (match [EQUAL]) (do
+            DeclE x <$> expression) (return $ OnlyDecl x)
 
 
     -- statements :: Parser [Stmt]
@@ -42,23 +57,27 @@ module Parser where
     --     x  <- statement
     --     xs <- statements
     --     return (x:xs) )
-    
+    addError :: InterpreterError -> Parser ()
+    addError e = do
+        st <- lift get
+        lift $ put (st {errors = e:errors st})
+
     statement :: Parser Stmt
     statement = ifM (match [PRINT]) printStmt exprStmt
 
     printStmt :: Parser Stmt
     printStmt = do
-        x <- Print <$> expression 
+        x <- Print <$> expression
         consumeSemi x
 
     consumeSemi :: a -> Parser a
     consumeSemi x = do
-        _ <- consume SEMICOLON "Expected ';' after value: " 
+        _ <- consume SEMICOLON "Expected ';' after value: "
         return x
 
     exprStmt :: Parser Stmt
     exprStmt = do
-        x <- expression 
+        x <- expression
         consumeSemi (Expression x)
 
     expression :: Parser Expr
@@ -78,7 +97,7 @@ module Parser where
     -- parses a == b != c form of expressions too.
     equality :: Parser Expr
     equality  = binexp comparison [BANG_EQUAL, EQUAL_EQUAL] Log
-    
+
 
     comparison :: Parser Expr
     comparison = binexp term [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] Log
@@ -111,10 +130,10 @@ module Parser where
                     _    <- consume RIGHT_PAREN $ "Primary Expected ')' after expression: "++ show expr
                     return $ Group expr
                 _      -> throwError $ ParserError $ "Primary Expected Expression: `"++ show st ++ "`."
-            
 
-    consume :: TokenType -> String -> Parser ()
-    consume t s = ifM (match [t]) (return ()) (do
+
+    consume :: TokenType -> String -> Parser Token
+    consume t s = ifM (match [t]) previous (do
         x <- current
         throwError $ ParserError $ s ++ " Token: "++ show x)
 
@@ -137,7 +156,7 @@ module Parser where
     isAtEnd = do
         st <- peek
         if tokenType st == EOF then return True else return False
-        
+
 
     incPointer :: Parser ()
     incPointer = ifM isAtEnd (return ()) (lift get >>= \p -> lift $ put (p {index = index p +1}))
@@ -167,8 +186,8 @@ module Parser where
     synchronize :: Parser Value
     synchronize = do
         incPointer
-        x <- previous 
-        if tokenType x == SEMICOLON then 
+        x <- previous
+        if tokenType x == SEMICOLON then
             return Nil
         else ifM isAtEnd (return Nil) (do
             tt <- peek
