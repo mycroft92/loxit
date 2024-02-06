@@ -12,6 +12,21 @@ module Evaluator where
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
 
+    statementEval:: [Stmt] -> Interpreter Value
+    statementEval []  = return Nil
+    statementEval [x] = stmtEval x
+    statementEval (x:xs) = do
+        _ <- stmtEval x
+        statementEval xs
+
+    stmtEval :: Stmt -> Interpreter Value
+    stmtEval (Print e) = do
+        x <- evaluate e
+        _ <- liftIO $ print x
+        return Nil
+    
+    stmtEval (Expression e) = evaluate e
+
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
     evaluate (Log ex1 tok ex2) = do
@@ -73,9 +88,17 @@ module Evaluator where
     raiseError :: InterpreterError -> Interpreter Value
     raiseError = ExceptT . return . Left 
 
-    runInterpreter :: Expr -> IO (Either InterpreterError Value)
+    -- runInterpreter :: Expr -> IO (Either InterpreterError Value)
+    -- runInterpreter e = 
+    --     let x = runStateT (runExceptT $ evaluate e) InterpreterState in
+    --         do
+    --             res <- x
+    --             case res of
+    --                 (Left err,_) -> return $ Left err
+    --                 (Right x,_)  -> return $ Right x
+    runInterpreter :: [Stmt] -> IO (Either InterpreterError Value)
     runInterpreter e = 
-        let x = runStateT (runExceptT $ evaluate e) InterpreterState in
+        let x = runStateT (runExceptT $ statementEval e) InterpreterState in
             do
                 res <- x
                 case res of

@@ -17,6 +17,10 @@ module Expr where
         | This
         | Super     
         | Group Expr deriving (Eq)
+
+    data Stmt = 
+        Expression Expr
+        | Print Expr deriving (Eq, Show)
     
     instance Show Value where
         show (Number x) = show x

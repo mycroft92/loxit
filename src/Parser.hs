@@ -17,20 +17,35 @@ module Parser where
     type Parser a = ExceptT InterpreterError (State ParserState) a
     -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
 
-    parse :: [Token] -> Either InterpreterError Expr
+    parse :: [Token] -> Either InterpreterError [Stmt]
     parse ls = 
-        case runState (runExceptT expression) (ParserState ls 0) of
+        case runState (runExceptT statements) (ParserState ls 0) of
             (Left err,_) -> Left err
             (Right x,_)  -> Right x
 
-    statements :: Parser [Expr]
+    statements :: Parser [Stmt]
     statements = ifM isAtEnd (return []) (do
         x  <- statement
         xs <- statements
         return (x:xs) )
     
-    statement :: Parser Expr
-    statement = undefined
+    statement :: Parser Stmt
+    statement = ifM (match [PRINT]) printStmt exprStmt
+
+    printStmt :: Parser Stmt
+    printStmt = do
+        x <- Print <$> expression 
+        consumeSemi x
+
+    consumeSemi :: a -> Parser a
+    consumeSemi x = do
+        _ <- consume SEMICOLON "Expected ';' after value: " 
+        return x
+
+    exprStmt :: Parser Stmt
+    exprStmt = do
+        x <- expression 
+        consumeSemi (Expression x)
 
     expression :: Parser Expr
     expression = equality
@@ -78,13 +93,15 @@ module Parser where
                 LEFT_PAREN -> do
                     _    <- incPointer
                     expr <- expression
-                    _    <- consume RIGHT_PAREN $ "Expected ')' after expression: "++ show expr
+                    _    <- consume RIGHT_PAREN $ "Primary Expected ')' after expression: "++ show expr
                     return $ Group expr
-                _      -> throwError $ ParserError $ "Expected Expression: `"++ show st ++ "`."
+                _      -> throwError $ ParserError $ "Primary Expected Expression: `"++ show st ++ "`."
             
 
     consume :: TokenType -> String -> Parser ()
-    consume t s = ifM (match [t]) (return ()) (throwError $ ParserError s)
+    consume t s = ifM (match [t]) (return ()) (do
+        x <- current
+        throwError $ ParserError $ s ++ " Token: "++ show x)
 
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
@@ -95,13 +112,17 @@ module Parser where
         else m_f
 
     peek :: Parser Token
-    peek = ifM isAtEnd (return makeEOF) (lift get >>= \p -> return (tokens p !! index p))
+    peek = current
+
+    current :: Parser Token
+    current = lift get >>= \p -> return (tokens p !! index p)
 
 
     isAtEnd :: Parser Bool
     isAtEnd = do
-        st <- lift get
-        return (index st >= length (tokens st))
+        st <- peek
+        if tokenType st == EOF then return True else return False
+        
 
     incPointer :: Parser ()
     incPointer = lift get >>= \p -> lift $ put (p {index = index p +1})
