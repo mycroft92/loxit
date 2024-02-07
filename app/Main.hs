@@ -6,8 +6,16 @@ import System.Environment
 import System.IO
 import qualified System.Exit as Exit
 
+banner :: String
+banner = "\
+\################################################\n\
+\               LOX INTERPRETTER               \n\
+\              Author: Madhukar Y.R            \n\
+\################################################"
+
 main :: IO ()
 main = do
+        putStrLn banner
         args <- getArgs
         progName <- getProgName
         putStrLn  $ "Running: "++ progName
