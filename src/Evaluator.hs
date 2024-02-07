@@ -1,12 +1,20 @@
 module Evaluator where
-    import Error
-    import Expr
-    import TokenTypes
-    import Control.Monad.State
-    import Control.Monad.Except
-    import Environment
-    
-    
+    import Error (InterpreterError(..))
+    import Expr (Decl(..),
+      Expr(Unary, Literal, Log, Binary, Group),
+      Stmt(..),
+      Value(..),
+      VarDecl(..) )
+    import TokenTypes (Token(tokenType, lexeme),
+      TokenType(..))
+    import Control.Monad.State (StateT(runStateT),
+      MonadIO(liftIO),
+      MonadState(get),
+      MonadTrans(lift))
+    import Control.Monad.Except (ExceptT(..), runExceptT)
+    import Environment (Env, newEnv, define)
+
+
     data InterpreterState = InterpreterState {
         env :: IO Env
     }
@@ -15,21 +23,20 @@ module Evaluator where
 
 
     declEvaluator:: [Decl] -> Interpreter Value
-    declEvaluator []  = return Nil
-    declEvaluator [x] = declEval x
+    declEvaluator []     = return Nil
+    declEvaluator [x]    = declEval x
     declEvaluator (x:xs) = do
         _ <- declEval x
         declEvaluator xs
 
     declEval :: Decl -> Interpreter Value
     declEval (Statement s) = stmtEval s
-    declEval (Decl v)   = varDeclEval v
+    declEval (Decl v)      = varDeclEval v
 
     getEnv :: Interpreter Env
     getEnv = do
         x  <- lift get
-        en <- liftIO (env x)
-        return en
+        liftIO (env x)
 
     varDeclEval :: VarDecl -> Interpreter Value
     varDeclEval (OnlyDecl v) = do
@@ -50,7 +57,7 @@ module Evaluator where
         x <- evaluate e
         _ <- liftIO $ print x
         return Nil
-    
+
     stmtEval (Expression e) = evaluate e
 
     evaluate :: Expr -> Interpreter Value
@@ -68,8 +75,8 @@ module Evaluator where
             _           -> raiseError Unexpected
         where
             matchOp f (Number x) (Number y) = return $ Bool (f x y)
-            matchOp _ x y = raiseError $ RuntimeError $ "Illegal comparison op on: "++show x ++ " "++show y 
-        
+            matchOp _ x y = raiseError $ RuntimeError $ "Illegal comparison op on: "++show x ++ " "++show y
+
     evaluate (Binary ex1 tok ex2) = do
         l <- evaluate ex1
         r <- evaluate ex2
@@ -101,18 +108,18 @@ module Evaluator where
                 v <- evaluate expr
                 case v of
                     Number x -> return $ Number (- x)
-                    _ -> raiseError $ RuntimeError $ "Undefined operation - on: "++ show expr 
+                    _ -> raiseError $ RuntimeError $ "Undefined operation - on: "++ show expr
             BANG -> do
                 v <- evaluate expr
                 case v of --ruby style for bang conversion
                     Bool b -> return $ Bool (not b)
                     Nil    -> return $ Bool False
                     _      -> return $ Bool True --raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
-            _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr 
+            _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr
     evaluate _ = undefined
 
     raiseError :: InterpreterError -> Interpreter Value
-    raiseError = ExceptT . return . Left 
+    raiseError = ExceptT . return . Left
 
     -- runInterpreter :: Expr -> IO (Either InterpreterError Value)
     -- runInterpreter e = 
@@ -123,7 +130,7 @@ module Evaluator where
     --                 (Left err,_) -> return $ Left err
     --                 (Right x,_)  -> return $ Right x
     runInterpreter :: [Decl] -> IO (Either InterpreterError Value)
-    runInterpreter e = 
+    runInterpreter e =
         let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState newEnv in
             do
                 res <- x
