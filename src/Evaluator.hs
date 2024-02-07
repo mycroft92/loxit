@@ -4,7 +4,7 @@ module Evaluator where
     import TokenTypes
     import Control.Monad.State
     import Control.Monad.Except
-
+    import Environment
     
     
     data InterpreterState = InterpreterState {
