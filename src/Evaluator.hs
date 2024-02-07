@@ -8,7 +8,7 @@ module Evaluator where
     
     
     data InterpreterState = InterpreterState {
-
+        env :: IO Env
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -23,14 +23,27 @@ module Evaluator where
 
     declEval :: Decl -> Interpreter Value
     declEval (Statement s) = stmtEval s
-    declEval (Decl v)   = declarationEval v
+    declEval (Decl v)   = varDeclEval v
 
-    declarationEval :: VarDecl -> Interpreter Value
-    declarationEval (OnlyDecl v) = do
-        _ <- liftIO $ print $ "var "++ show v
+    getEnv :: Interpreter Env
+    getEnv = do
+        x  <- lift get
+        en <- liftIO (env x)
+        return en
+
+    varDeclEval :: VarDecl -> Interpreter Value
+    varDeclEval (OnlyDecl v) = do
+        x <- getEnv
+        _ <- liftIO $ define (lexeme v) Nil x
+        _ <- liftIO $ print $ "var "++ lexeme v
         return Nil
-    
-    declarationEval (DeclE x e) = undefined
+
+    varDeclEval (DeclE v e) = do
+        x   <- getEnv
+        val <- evaluate e
+        _ <- liftIO $ define (lexeme v) val x
+        _ <- liftIO $ print $ "var "++ lexeme v ++ " = " ++ show val
+        return val
 
     stmtEval :: Stmt -> Interpreter Value
     stmtEval (Print e) = do
@@ -111,7 +124,7 @@ module Evaluator where
     --                 (Right x,_)  -> return $ Right x
     runInterpreter :: [Decl] -> IO (Either InterpreterError Value)
     runInterpreter e = 
-        let x = runStateT (runExceptT $ declEvaluator e) InterpreterState in
+        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState newEnv in
             do
                 res <- x
                 case res of
