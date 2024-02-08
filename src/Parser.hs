@@ -81,7 +81,18 @@ module Parser where
         consumeSemi (Expression x)
 
     expression :: Parser Expr
-    expression = equality
+    expression = assignment
+
+    assignment :: Parser Expr
+    assignment = do
+        x <- equality
+        ifM (match [EQUAL]) (do
+            eq <- previous
+            v  <- assignment
+            case x of
+                Var z -> return $ Assign z v
+                _     -> throwError $ ParserError $ "Invalid assign l-value: "++ show x ++" before: `"++ show eq ++ "`." ) 
+            (return x)
 
     -- Common function to parse binary expressions
     binexp :: Parser Expr -> [TokenType] -> (Expr -> Token -> Expr -> Expr) -> Parser Expr

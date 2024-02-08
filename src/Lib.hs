@@ -11,6 +11,7 @@ import Data.List (dropWhileEnd)
 import qualified Scanner  as S
 import qualified Parser as P
 import Evaluator (runInterpreter)
+import Environment (newEnv, Env)
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -18,27 +19,32 @@ trim = dropWhileEnd isSpace . dropWhile isSpace
 
 runFile :: String -> IO Int
 runFile s = do
+    env <- newEnv
     contents <- readFile s
-    run contents s
+    run contents s env
 
 runPrompt :: IO ()
 runPrompt = do
-    putStr "> "
-    line <- getLine
-    if trim line == "" then
-        return ()
-    else do
-        _ <- run line "interp"
-        runPrompt
+    env <- newEnv
+    handler env
+    where
+        handler ev = do
+            putStr "> "
+            line <- getLine
+            if trim line == "" then
+                return ()
+            else do
+                _ <- run line "interp" ev
+                handler ev
 
-run :: String -> String -> IO Int
-run contents fn = handler $ do --This is an either monad
+run :: String -> String -> Env -> IO Int
+run contents fn env = handler $ do --This is an either monad
     res <- S.parse fn contents
     P.parse res
     where --IO monad comes here
         handler (Left es)     = mapM_ print es >> return 1
         handler (Right expr) = do 
-            x <- runInterpreter expr
+            x <- runInterpreter expr env
             print x
             case x of
                 Left _ -> return 1

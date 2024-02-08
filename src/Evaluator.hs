@@ -1,7 +1,7 @@
 module Evaluator where
     import Error (InterpreterError(..))
     import Expr (Decl(..),
-      Expr(Unary, Literal, Log, Binary, Group),
+      Expr(..),
       Stmt(..),
       Value(..),
       VarDecl(..) )
@@ -11,12 +11,14 @@ module Evaluator where
       MonadIO(liftIO),
       MonadState(get),
       MonadTrans(lift))
-    import Control.Monad.Except (ExceptT(..), runExceptT)
-    import Environment (Env, newEnv, define)
+    import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
+    import Environment (Env (..), define, isMember, getVar)
+    import Data.IORef
 
+    import Data.Map.Strict as Map    
 
     data InterpreterState = InterpreterState {
-        env :: IO Env
+        env :: Env
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -27,6 +29,8 @@ module Evaluator where
     declEvaluator [x]    = declEval x
     declEvaluator (x:xs) = do
         _ <- declEval x
+        -- a <- getEnv
+        -- _ <- liftIO $ printEnv a
         declEvaluator xs
 
     declEval :: Decl -> Interpreter Value
@@ -36,13 +40,13 @@ module Evaluator where
     getEnv :: Interpreter Env
     getEnv = do
         x  <- lift get
-        liftIO (env x)
+        return $ env x
+    
 
     varDeclEval :: VarDecl -> Interpreter Value
     varDeclEval (OnlyDecl v) = do
         x <- getEnv
         _ <- liftIO $ define (lexeme v) Nil x
-        _ <- liftIO $ print $ "var "++ lexeme v
         return Nil
 
     varDeclEval (DeclE v e) = do
@@ -116,6 +120,24 @@ module Evaluator where
                     Nil    -> return $ Bool False
                     _      -> return $ Bool True --raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
             _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr
+
+    evaluate (Assign x e) = do
+        en <- getEnv
+        b  <- liftIO $ isMember (lexeme x) en
+        (if b then (do
+            v  <- evaluate e
+            _  <- liftIO $ define (lexeme x) v en
+            return v) else throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e))
+    
+    evaluate (Var x) = do
+        en <- getEnv
+        v  <- liftIO $ getVar (lexeme x) en
+        case v of
+            Just val -> return val
+            Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
+    
+
+
     evaluate _ = undefined
 
     raiseError :: InterpreterError -> Interpreter Value
@@ -129,9 +151,9 @@ module Evaluator where
     --             case res of
     --                 (Left err,_) -> return $ Left err
     --                 (Right x,_)  -> return $ Right x
-    runInterpreter :: [Decl] -> IO (Either InterpreterError Value)
-    runInterpreter e =
-        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState newEnv in
+    runInterpreter :: [Decl] -> Env -> IO (Either InterpreterError Value)
+    runInterpreter e ev = do
+        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState ev in
             do
                 res <- x
                 case res of

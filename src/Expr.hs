@@ -14,6 +14,7 @@ module Expr where
         | Unary Token Expr
         | Literal Value
         | Var Token
+        | Assign Token Expr
         | This
         | Super     
         | Group Expr deriving (Eq)
@@ -40,6 +41,7 @@ module Expr where
         show (Unary t e)    = show (tokenType t) ++" "++ show e
         show (Literal v)    = show v
         show (Var t)        = show (lexeme t)
+        show (Assign v e)   = lexeme v ++ " = "++ show e
         show  This          = "this"
         show  Super         = "super"
         show (Group e)      = "("++show e ++")"
