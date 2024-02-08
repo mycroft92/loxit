@@ -9,14 +9,14 @@ module Evaluator where
       TokenType(..))
     import Control.Monad.State (StateT(runStateT),
       MonadIO(liftIO),
-      MonadState(get),
+      MonadState(get, put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign)
+    import Environment (Env (..), define, getVar, assign, createChildEnv)
     import Data.IORef  
 
     data InterpreterState = InterpreterState {
-        env :: Env
+        env :: IORef Env
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -35,9 +35,13 @@ module Evaluator where
 
     getEnv :: Interpreter Env
     getEnv = do
-        x  <- lift get
-        return $ env x
-    
+        en  <- lift get
+        liftIO $ readIORef (env en)
+
+    putEnv :: Env -> Interpreter ()
+    putEnv ev = do
+        x <- lift get
+        liftIO $ writeIORef (env x) ev    
 
     varDeclEval :: VarDecl -> Interpreter Value
     varDeclEval (OnlyDecl v) = do
@@ -61,8 +65,16 @@ module Evaluator where
     stmtEval (Expression e) = evaluate e
 
     stmtEval (Block ds)  = do
-
-        return Nil
+        previous <- getEnv
+        new_env <- liftIO $ createChildEnv previous
+        putEnv new_env
+        catchError (do 
+            v <- declEvaluator ds 
+            putEnv previous
+            return v) (\e -> do
+                liftIO $ print e
+                putEnv previous
+                return Nil)
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
@@ -143,7 +155,8 @@ module Evaluator where
 
     runInterpreter :: [Decl] -> Env -> IO (Either InterpreterError Value)
     runInterpreter e ev = do
-        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState ev in
+        nv <- newIORef ev
+        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState nv in
             do
                 res <- x
                 case res of

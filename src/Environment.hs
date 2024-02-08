@@ -21,6 +21,12 @@ module Environment where
         enc <- newIORef Nothing 
         return $ Env ev enc
 
+    createChildEnv :: Env -> IO Env
+    createChildEnv env = do
+        ev  <- newIORef Map.empty
+        enc <- newIORef $ Just env
+        return $ Env ev enc
+
     define :: String -> Value -> Env -> IO ()
     define name val env = modifyIORef' (e_values env)  (Map.insert name val)
 
