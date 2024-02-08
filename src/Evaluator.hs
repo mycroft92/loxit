@@ -16,7 +16,8 @@ module Evaluator where
     import Data.IORef  
 
     data InterpreterState = InterpreterState {
-        env :: IORef Env
+        env :: IORef Env,
+        errors :: [InterpreterError]
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -72,9 +73,9 @@ module Evaluator where
             v <- declEvaluator ds 
             putEnv previous
             return v) (\e -> do
-                liftIO $ print e
+                liftIO $ print e -- this would be stack trace
                 putEnv previous
-                return Nil)
+                throwError e)
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
@@ -156,7 +157,7 @@ module Evaluator where
     runInterpreter :: [Decl] -> Env -> IO (Either InterpreterError Value)
     runInterpreter e ev = do
         nv <- newIORef ev
-        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState nv in
+        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState nv [] in
             do
                 res <- x
                 case res of
