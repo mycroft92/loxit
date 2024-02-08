@@ -21,7 +21,8 @@ module Expr where
 
     data Stmt = 
         Expression Expr
-        | Print Expr deriving (Eq, Show)
+        | Print Expr 
+        | Block [Decl] deriving (Eq, Show)
 
     data Decl =
         Statement Stmt

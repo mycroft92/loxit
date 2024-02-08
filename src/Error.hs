@@ -19,3 +19,10 @@ module Error where
         | ParserError String
         | ScannerError ErrInfo
         | InterpreterError Token String deriving (Show, Eq)
+
+    ifM :: Monad m => m Bool -> m a -> m a -> m a
+    ifM bt m_t m_f = do
+        v <- bt
+        if v then
+            m_t
+        else m_f

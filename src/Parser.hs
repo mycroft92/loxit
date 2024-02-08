@@ -6,7 +6,8 @@ module Parser where
     -- import Control.Monad
     import Control.Monad.State
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
-
+    import Control.Monad (when)
+    
     data ParserState = ParserState {
         tokens :: [Token],
         index  :: Int,
@@ -53,7 +54,27 @@ module Parser where
         lift $ put (st {errors = e:errors st})
 
     statement :: Parser Stmt
-    statement = ifM (match [PRINT]) printStmt exprStmt
+    statement = cond [(match [PRINT], printStmt), (match [LEFT_BRACE], block)] exprStmt
+
+    block :: Parser Stmt
+    block = do
+        xs <- loop []
+        _ <- consume RIGHT_BRACE "Expected '}' before value:"
+        return $ Block xs
+        where 
+            loop xs = do
+                end <- isAtEnd
+                b   <- check RIGHT_BRACE 
+                if not (b ||end) 
+                    then do
+                        x <- declaration
+                        loop $ xs ++ [x]
+                    else return xs
+
+
+    cond :: [(Parser Bool, Parser Stmt)] -> Parser Stmt -> Parser Stmt
+    cond [] d = d
+    cond ((c,a):xs) d = ifM c a (cond xs d)
 
     printStmt :: Parser Stmt
     printStmt = do
@@ -62,7 +83,7 @@ module Parser where
 
     consumeSemi :: a -> Parser a
     consumeSemi x = do
-        _ <- consume SEMICOLON "Expected ';' after value: "
+        _ <- consume SEMICOLON "Expected ';' before value: "
         return x
 
     exprStmt :: Parser Stmt
@@ -136,18 +157,18 @@ module Parser where
         x <- current
         throwError $ ParserError $ s ++ " Token: "++ show x)
 
-    ifM :: Monad m => m Bool -> m a -> m a -> m a
-    ifM bt m_t m_f = do
-        v <- bt
-        if v then
-            m_t
-        else m_f
-
     peek :: Parser Token
     peek = current
 
     current :: Parser Token
     current = lift get >>= \p -> return (tokens p !! index p)
+
+    check :: TokenType -> Parser Bool
+    check tt = do
+        x <- peek
+        if tokenType x == tt 
+            then return True
+            else return False        
 
     isAtEnd :: Parser Bool
     isAtEnd = do

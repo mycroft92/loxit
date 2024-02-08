@@ -5,7 +5,8 @@ module Environment where
     import Expr (Value)
 
     data Env = Env {
-        e_values :: IORef (Map.Map String Value)
+        e_values  :: IORef (Map.Map String Value),
+        enclosing :: IORef (Maybe Env) -- stack of envs
     }
 
     printEnv :: Env -> IO String
@@ -16,16 +17,30 @@ module Environment where
 
     newEnv :: IO Env
     newEnv = do
-        ev <- newIORef Map.empty
-        return $ Env ev
+        ev  <- newIORef Map.empty
+        enc <- newIORef Nothing 
+        return $ Env ev enc
 
     define :: String -> Value -> Env -> IO ()
     define name val env = modifyIORef' (e_values env)  (Map.insert name val)
 
+    assign :: String -> Value -> Env -> IO (Maybe ())
+    assign name val env = ifM (isMember name env) (Just <$> define name val env) (do
+        enc <- readIORef (enclosing env)
+        case enc of
+            Nothing -> return Nothing
+            Just ev -> assign name val ev)
+
+    -- updated to use nested environments
     getVar :: String -> Env -> IO (Maybe Value)
     getVar vnam env = do
-        m <- readIORef (e_values env)
-        return (Map.lookup vnam m)
+        m   <- readIORef (e_values env)
+        enc <- readIORef (enclosing env)
+        case Map.lookup vnam m of
+            Nothing -> case enc of
+                            Nothing -> return Nothing
+                            Just ev -> getVar vnam ev
+            Just x  -> return $ Just x 
 
     isMember :: String -> Env -> IO Bool
     isMember x e = do

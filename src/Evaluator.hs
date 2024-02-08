@@ -12,7 +12,7 @@ module Evaluator where
       MonadState(get),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, isMember, getVar)
+    import Environment (Env (..), define, getVar, assign)
     import Data.IORef  
 
     data InterpreterState = InterpreterState {
@@ -27,8 +27,6 @@ module Evaluator where
     declEvaluator [x]    = declEval x
     declEvaluator (x:xs) = do
         _ <- declEval x
-        -- a <- getEnv
-        -- _ <- liftIO $ printEnv a
         declEvaluator xs
 
     declEval :: Decl -> Interpreter Value
@@ -61,6 +59,10 @@ module Evaluator where
         return Nil
 
     stmtEval (Expression e) = evaluate e
+
+    stmtEval (Block ds)  = do
+
+        return Nil
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
@@ -121,11 +123,11 @@ module Evaluator where
 
     evaluate (Assign x e) = do
         en <- getEnv
-        b  <- liftIO $ isMember (lexeme x) en
-        (if b then (do
-            v  <- evaluate e
-            _  <- liftIO $ define (lexeme x) v en
-            return v) else throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e))
+        v  <- evaluate e
+        b  <- liftIO $ assign (lexeme x) v en 
+        case b of
+            Nothing -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e)
+            Just _  -> return v
 
     evaluate (Var x) = do
         en <- getEnv
