@@ -54,7 +54,6 @@ module Evaluator where
         x   <- getEnv
         val <- evaluate e
         _ <- liftIO $ define (lexeme v) val x
-        _ <- liftIO $ print $ "var "++ lexeme v ++ " = " ++ show val
         return val
 
     stmtEval :: Stmt -> Interpreter Value
