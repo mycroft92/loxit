@@ -7,9 +7,6 @@ module Parser where
     import Control.Monad.State
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
 
-
-
-
     data ParserState = ParserState {
         tokens :: [Token],
         index  :: Int,
@@ -17,13 +14,12 @@ module Parser where
     } deriving (Show, Eq)
 
     type Parser a = ExceptT InterpreterError (State ParserState) a
-    -- newtype Parser a = Parser {runParse :: ParserState -> Either ErrInfo (a, ParserState)}
 
     parse :: [Token] -> Either [InterpreterError] [Decl]
     parse ls =
         case runState (runExceptT declarations) (ParserState ls 0 []) of
-            (Left err,_) -> Left [err]
-            (Right x,s)  -> handle x s
+            (Left err, _)  -> Left [err]
+            (Right  x, s)  -> handle x s
         where
             handle x s
                 | not (null (errors s)) = Left $ errors s
@@ -33,7 +29,7 @@ module Parser where
     declarations = ifM isAtEnd (return []) (do
         x  <- declaration
         xs <- declarations
-        return (x:xs) )
+        return (x:xs))
 
     declaration :: Parser Decl
     declaration = catchError par (\e -> addError e >> Statement . Expression . Literal <$> synchronize)
@@ -51,12 +47,6 @@ module Parser where
         ifM (match [EQUAL]) (do
             DeclE x <$> expression) (return $ OnlyDecl x)
 
-
-    -- statements :: Parser [Stmt]
-    -- statements = ifM isAtEnd (return []) (do
-    --     x  <- statement
-    --     xs <- statements
-    --     return (x:xs) )
     addError :: InterpreterError -> Parser ()
     addError e = do
         st <- lift get
@@ -109,7 +99,6 @@ module Parser where
     equality :: Parser Expr
     equality  = binexp comparison [BANG_EQUAL, EQUAL_EQUAL] Log
 
-
     comparison :: Parser Expr
     comparison = binexp term [GREATER, GREATER_EQUAL, LESS, LESS_EQUAL] Log
 
@@ -142,12 +131,10 @@ module Parser where
                     return $ Group expr
                 _      -> throwError $ ParserError $ "Primary Expected Expression: `"++ show st ++ "`."
 
-
     consume :: TokenType -> String -> Parser Token
     consume t s = ifM (match [t]) previous (do
         x <- current
         throwError $ ParserError $ s ++ " Token: "++ show x)
-
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
     ifM bt m_t m_f = do
@@ -162,12 +149,10 @@ module Parser where
     current :: Parser Token
     current = lift get >>= \p -> return (tokens p !! index p)
 
-
     isAtEnd :: Parser Bool
     isAtEnd = do
         st <- peek
         if tokenType st == EOF then return True else return False
-
 
     incPointer :: Parser ()
     incPointer = ifM isAtEnd (return ()) (lift get >>= \p -> lift $ put (p {index = index p +1}))

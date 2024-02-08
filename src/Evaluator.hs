@@ -13,9 +13,7 @@ module Evaluator where
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
     import Environment (Env (..), define, isMember, getVar)
-    import Data.IORef
-
-    import Data.Map.Strict as Map    
+    import Data.IORef  
 
     data InterpreterState = InterpreterState {
         env :: Env
@@ -70,7 +68,7 @@ module Evaluator where
         l <- evaluate ex1
         r <- evaluate ex2
         case tokenType tok of
-            GREATER    -> matchOp (>) l r
+            GREATER     -> matchOp (>) l r
             GREATER_EQUAL -> matchOp (>=) l r
             LESS        -> matchOp (<) l r
             LESS_EQUAL  -> matchOp (<=) l r
@@ -128,15 +126,13 @@ module Evaluator where
             v  <- evaluate e
             _  <- liftIO $ define (lexeme x) v en
             return v) else throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e))
-    
+
     evaluate (Var x) = do
         en <- getEnv
         v  <- liftIO $ getVar (lexeme x) en
         case v of
             Just val -> return val
             Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
-    
-
 
     evaluate _ = undefined
 
@@ -149,5 +145,5 @@ module Evaluator where
             do
                 res <- x
                 case res of
-                    (Left err,_) -> return $ Left err
-                    (Right x,_)  -> return $ Right x
+                    (Left err, _) -> return $ Left err
+                    (Right  x, _) -> return $ Right x
