@@ -101,7 +101,7 @@ module Evaluator where
             divide (Number x) (Number y) x1 y1
                 | y /= 0    = return $ Number (x/y)
                 | otherwise = raiseError $ RuntimeError $ "Division by 0: "++show x1 ++ ","++show y1
-            divide _ _ x y = raiseError $ RuntimeError $ "Undefined operation / on: "++show x ++ ", "++show y
+            divide _ _ x y  = raiseError $ RuntimeError $ "Undefined operation / on: "++show x ++ ", "++show y
 
             mult (Number x) (Number y) _ _ = return $ Number (x*y)
             mult _ _ x y = raiseError $ RuntimeError $ "Undefined operation * on: "++show x ++ ", "++show y
@@ -143,14 +143,6 @@ module Evaluator where
     raiseError :: InterpreterError -> Interpreter Value
     raiseError = ExceptT . return . Left
 
-    -- runInterpreter :: Expr -> IO (Either InterpreterError Value)
-    -- runInterpreter e = 
-    --     let x = runStateT (runExceptT $ evaluate e) InterpreterState in
-    --         do
-    --             res <- x
-    --             case res of
-    --                 (Left err,_) -> return $ Left err
-    --                 (Right x,_)  -> return $ Right x
     runInterpreter :: [Decl] -> Env -> IO (Either InterpreterError Value)
     runInterpreter e ev = do
         let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState ev in
