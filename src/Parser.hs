@@ -6,8 +6,7 @@ module Parser where
     -- import Control.Monad
     import Control.Monad.State
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
-    import Control.Monad (when)
-
+    
     data ParserState = ParserState {
         tokens :: [Token],
         index  :: Int,
@@ -54,7 +53,56 @@ module Parser where
         lift $ put (st {errors = e:errors st})
 
     statement :: Parser Stmt
-    statement = cond [(match [PRINT], printStmt), (match [LEFT_BRACE], block), (match [IF], ite)] exprStmt
+    statement = cond [(match [PRINT], printStmt), 
+        (match [LEFT_BRACE], block), 
+        (match [IF], ite),
+        (match [WHILE], whileStmt),
+        (match [FOR], forStmt)] exprStmt
+
+    forStmt :: Parser Stmt
+    forStmt = do
+        _ <- consume LEFT_PAREN "Expected '(' after 'for'."
+        ifM (match [SEMICOLON]) (parseCond . Statement . Expression . Literal$ Nil) (
+            ifM (match [VAR]) (
+                do
+                    init <- varDecl -- semicolon parsing is subsumed here
+                    parseCond $ Decl init
+            ) (do
+                init <- exprStmt -- semicolon parsing is subsumed here
+                parseCond $ Statement init))
+        where
+            parseCond init = ifM (match [SEMICOLON]) (parseIncr init $ Literal Nil) (do
+                condition <- expression
+                _ <- consume SEMICOLON "Expect ';' after 'for' loop condition."
+                parseIncr init condition)
+            parseIncr init condition = ifM (match [RIGHT_PAREN]) (parseBody init condition (Literal Nil)) (do
+                incr <- expression
+                _ <- consume RIGHT_PAREN "Expect ')' after for clauses."
+                parseBody init condition incr)
+            parseBody init condition incr = do
+                body <- statement
+                handler init condition incr body
+            -- write the desugaring logic here
+            handler init condition incr body = 
+                case incr of
+                    (Literal Nil) -> handleCond init condition body
+                    _ -> handleCond init condition $ Block [Statement body, Statement $ Expression incr]
+            handleCond init condition body =
+                case condition of
+                    (Literal Nil) -> handleInit init (While (Literal $ Bool True)  body)
+                    _             -> handleInit init (While condition body)
+            handleInit init body =
+                case init of
+                    (Statement (Expression  (Literal Nil))) -> return body
+                    _ -> return $ Block [init, Statement body]
+                
+
+    whileStmt :: Parser Stmt
+    whileStmt = do 
+        _ <- consume LEFT_PAREN "Expected '(' after 'while'."
+        condition <- expression
+        _ <- consume RIGHT_PAREN "Expected ')' after 'while' condition."
+        While condition . Block <$> declarations
 
     ite :: Parser Stmt
     ite = do

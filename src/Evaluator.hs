@@ -13,7 +13,7 @@ module Evaluator where
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
     import Environment (Env (..), define, getVar, assign, createChildEnv)
-    import Data.IORef  
+    import Data.IORef
 
     data InterpreterState = InterpreterState {
         env :: IORef Env,
@@ -42,7 +42,7 @@ module Evaluator where
     putEnv :: Env -> Interpreter ()
     putEnv ev = do
         x <- lift get
-        liftIO $ writeIORef (env x) ev    
+        liftIO $ writeIORef (env x) ev
 
     varDeclEval :: VarDecl -> Interpreter Value
     varDeclEval (OnlyDecl v) = do
@@ -68,24 +68,26 @@ module Evaluator where
         previous <- getEnv
         new_env <- liftIO $ createChildEnv previous
         putEnv new_env
-        catchError (do 
-            v <- declEvaluator ds 
+        catchError (do
+            v <- declEvaluator ds
             putEnv previous
             return v) (\e -> do
                 liftIO $ print e -- this would be stack trace
                 putEnv previous
                 throwError e)
-    
+
     stmtEval (ITE bc t mf) =
         ifM (isTruthy bc) (stmtEval t) (
             case mf of
                 Nothing -> return Nil
                 Just s  -> stmtEval s)
+    -- this doesn't return last statement value for now
+    stmtEval (While bc st) = ifM (isTruthy bc) (stmtEval st >> stmtEval (While bc st)) (return Nil)
 
 
     isTruthy :: Expr -> Interpreter Bool
     isTruthy e = do
-        x <- evaluate e 
+        x <- evaluate e
         case x of
             Nil -> return False
             Bool b -> return b
@@ -95,18 +97,27 @@ module Evaluator where
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
-    evaluate (Log ex1 tok ex2) = do
-        l <- evaluate ex1
-        r <- evaluate ex2
+    evaluate (Log ex1 tok ex2) =
         case tokenType tok of
-            GREATER     -> matchOp (>) l r
-            GREATER_EQUAL -> matchOp (>=) l r
-            LESS        -> matchOp (<) l r
-            LESS_EQUAL  -> matchOp (<=) l r
-            EQUAL_EQUAL -> return $ Bool $ l==r
-            BANG_EQUAL  -> return $ Bool $ l/=r
+            GREATER     -> readExps ex1 ex2 matchOp (>)
+            GREATER_EQUAL -> readExps ex1 ex2 matchOp (>=)
+            LESS        -> readExps ex1 ex2 matchOp (<)
+            LESS_EQUAL  -> readExps ex1 ex2 matchOp (<=)
+            EQUAL_EQUAL -> readExps ex1 ex2 runComp (==)
+            BANG_EQUAL  -> readExps ex1 ex2 runComp (/=)
+            AND         -> andTruth ex1 ex2
+            OR          -> orTruth  ex1 ex2
             _           -> raiseError Unexpected
         where
+            readExps ex1 ex2 f op = do
+                l <- evaluate ex1
+                r <- evaluate ex2
+                f op l r
+            runComp op l r = return $ Bool $ l `op` r
+            -- I don't like this evaluation but it is what it is
+            andTruth ex1 ex2 = ifM (isTruthy ex1) (ifM (isTruthy ex2) (evaluate ex2) (return Nil)) (return Nil)
+            orTruth  ex1 ex2 = ifM (isTruthy ex1) (evaluate ex1) (evaluate ex2)
+
             matchOp f (Number x) (Number y) = return $ Bool (f x y)
             matchOp _ x y = raiseError $ RuntimeError $ "Illegal comparison op on: "++show x ++ " "++show y
 
@@ -153,7 +164,7 @@ module Evaluator where
     evaluate (Assign x e) = do
         en <- getEnv
         v  <- evaluate e
-        b  <- liftIO $ assign (lexeme x) v en 
+        b  <- liftIO $ assign (lexeme x) v en
         case b of
             Nothing -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e)
             Just _  -> return v
