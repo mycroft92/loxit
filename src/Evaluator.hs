@@ -1,5 +1,5 @@
 module Evaluator where
-    import Error (InterpreterError(..))
+    import Error (InterpreterError(..), ifM)
     import Expr (Decl(..),
       Expr(..),
       Stmt(..),
@@ -75,6 +75,23 @@ module Evaluator where
                 liftIO $ print e -- this would be stack trace
                 putEnv previous
                 throwError e)
+    
+    stmtEval (ITE bc t mf) =
+        ifM (isTruthy bc) (stmtEval t) (
+            case mf of
+                Nothing -> return Nil
+                Just s  -> stmtEval s)
+
+
+    isTruthy :: Expr -> Interpreter Bool
+    isTruthy e = do
+        x <- evaluate e 
+        case x of
+            Nil -> return False
+            Bool b -> return b
+            _   -> return True
+
+
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x

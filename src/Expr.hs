@@ -22,7 +22,8 @@ module Expr where
     data Stmt = 
         Expression Expr
         | Print Expr 
-        | Block [Decl] deriving (Eq, Show)
+        | Block [Decl] 
+        | ITE Expr Stmt (Maybe Stmt) deriving (Eq, Show)
 
     data Decl =
         Statement Stmt

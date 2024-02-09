@@ -7,7 +7,7 @@ module Parser where
     import Control.Monad.State
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
     import Control.Monad (when)
-    
+
     data ParserState = ParserState {
         tokens :: [Token],
         index  :: Int,
@@ -54,18 +54,26 @@ module Parser where
         lift $ put (st {errors = e:errors st})
 
     statement :: Parser Stmt
-    statement = cond [(match [PRINT], printStmt), (match [LEFT_BRACE], block)] exprStmt
+    statement = cond [(match [PRINT], printStmt), (match [LEFT_BRACE], block), (match [IF], ite)] exprStmt
+
+    ite :: Parser Stmt
+    ite = do
+        _ <- consume LEFT_PAREN "Expected '(' after 'if'. "
+        condition <- expression
+        _ <- consume RIGHT_PAREN "Expected ')' after 'if' condition. "
+        stmt <- statement
+        ifM (match [ELSE]) (ITE condition stmt . Just <$> statement) (return $ ITE condition stmt Nothing)
 
     block :: Parser Stmt
     block = do
         xs <- loop []
         _ <- consume RIGHT_BRACE "Expected '}' before value:"
         return $ Block xs
-        where 
+        where
             loop xs = do
                 end <- isAtEnd
-                b   <- check RIGHT_BRACE 
-                if not (b ||end) 
+                b   <- check RIGHT_BRACE
+                if not (b ||end)
                     then do
                         x <- declaration
                         loop $ xs ++ [x]
@@ -91,20 +99,27 @@ module Parser where
         x <- expression
         consumeSemi (Expression x)
 
-    expression :: Parser Expr
-    expression = assignment
-
     assignment :: Parser Expr
     assignment = do
-        x <- equality
+        x <- logicalor
         ifM (match [EQUAL]) (do
             eq <- previous
             v  <- assignment
             case x of
                 Var z -> return $ Assign z v
-                _     -> throwError $ ParserError $ "Invalid assign l-value: "++ show x ++" before: `"++ show eq ++ "`." ) 
+                _     -> throwError $ ParserError $ "Invalid assign l-value: "++ show x ++" before: `"++ show eq ++ "`." )
             (return x)
 
+
+    logicalor :: Parser Expr
+    logicalor = binexp logicaland [OR] Log
+
+    logicaland :: Parser Expr
+    logicaland = binexp equality [AND] Log
+
+    expression :: Parser Expr
+    expression = assignment
+    
     -- Common function to parse binary expressions
     binexp :: Parser Expr -> [TokenType] -> (Expr -> Token -> Expr -> Expr) -> Parser Expr
     binexp next ts constr = do
@@ -166,9 +181,9 @@ module Parser where
     check :: TokenType -> Parser Bool
     check tt = do
         x <- peek
-        if tokenType x == tt 
+        if tokenType x == tt
             then return True
-            else return False        
+            else return False
 
     isAtEnd :: Parser Bool
     isAtEnd = do
