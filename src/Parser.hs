@@ -5,8 +5,9 @@ module Parser where
     import Expr
     -- import Control.Monad
     import Control.Monad.State
+    import Control.Monad.State(MonadIO(liftIO))
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
-    
+
     data ParserState = ParserState {
         tokens :: [Token],
         index  :: Int,
@@ -53,8 +54,8 @@ module Parser where
         lift $ put (st {errors = e:errors st})
 
     statement :: Parser Stmt
-    statement = cond [(match [PRINT], printStmt), 
-        (match [LEFT_BRACE], block), 
+    statement = cond [(match [PRINT], printStmt),
+        (match [LEFT_BRACE], block),
         (match [IF], ite),
         (match [WHILE], whileStmt),
         (match [FOR], forStmt)] exprStmt
@@ -83,7 +84,7 @@ module Parser where
                 body <- statement
                 handler init condition incr body
             -- write the desugaring logic here
-            handler init condition incr body = 
+            handler init condition incr body =
                 case incr of
                     (Literal Nil) -> handleCond init condition body
                     _ -> handleCond init condition $ Block [Statement body, Statement $ Expression incr]
@@ -95,10 +96,10 @@ module Parser where
                 case init of
                     (Statement (Expression  (Literal Nil))) -> return body
                     _ -> return $ Block [init, Statement body]
-                
+
 
     whileStmt :: Parser Stmt
-    whileStmt = do 
+    whileStmt = do
         _ <- consume LEFT_PAREN "Expected '(' after 'while'."
         condition <- expression
         _ <- consume RIGHT_PAREN "Expected ')' after 'while' condition."
@@ -158,7 +159,6 @@ module Parser where
                 _     -> throwError $ ParserError $ "Invalid assign l-value: "++ show x ++" before: `"++ show eq ++ "`." )
             (return x)
 
-
     logicalor :: Parser Expr
     logicalor = binexp logicaland [OR] Log
 
@@ -167,7 +167,7 @@ module Parser where
 
     expression :: Parser Expr
     expression = assignment
-    
+
     -- Common function to parse binary expressions
     binexp :: Parser Expr -> [TokenType] -> (Expr -> Token -> Expr -> Expr) -> Parser Expr
     binexp next ts constr = do
@@ -195,7 +195,25 @@ module Parser where
     unary :: Parser Expr
     unary = ifM (match [BANG, MINUS]) (do
         op    <- previous
-        Unary op <$> unary) primary
+        Unary op <$> unary) call
+
+    call :: Parser Expr
+    call = do
+        prim <- primary
+        loop prim
+        where
+            loop expr = ifM (match [LEFT_PAREN]) (finishCall expr) (return expr)
+            finishCall expr = ifM (match [RIGHT_PAREN]) (return $ Call expr []) (do
+                first <- expression
+                args <- commaCollector [first]
+                _  <- consume RIGHT_PAREN "Expect ')' after call arguments."
+                return $ Call expr args)
+            commaCollector args = ifM (match [COMMA]) (do
+                expr <- expression
+                if length args >= 255 
+                    then throwError $ ParserError "Can't have more than 255 call arguments!" 
+                    else commaCollector (expr:args))  (return args)
+
 
     primary :: Parser Expr
     primary = do

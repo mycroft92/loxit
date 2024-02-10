@@ -15,6 +15,7 @@ module Expr where
         | Literal Value
         | Var Token
         | Assign Token Expr
+        | Call Expr [Expr] -- calling function, args
         | This
         | Super     
         | Group Expr deriving (Eq)
@@ -45,6 +46,7 @@ module Expr where
         show (Literal v)    = show v
         show (Var t)        = show (lexeme t)
         show (Assign v e)   = lexeme v ++ " = "++ show e
+        show (Call e arg)   = show e ++ "("++ concatMap (\x -> show x ++ ", ") arg  ++")"
         show  This          = "this"
         show  Super         = "super"
         show (Group e)      = "("++show e ++")"
