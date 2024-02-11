@@ -37,7 +37,37 @@ module Parser where
 
     declaration :: Parser Decl
     declaration = catchError par (\e -> addError e >> Statement . Expression . Literal <$> synchronize)
-        where par = ifM (match [VAR]) (Decl <$> varDecl) (Statement <$> statement)
+        where par = cond [
+                (match [VAR], Decl <$> varDecl),
+                (match [FUN], functionStmt)] (Statement <$> statement)
+
+    functionStmt :: Parser Decl
+    functionStmt = do
+        name <- consume IDENT "Expect function name."
+        _    <- consume LEFT_PAREN "Expect '(' after function name."
+        ifM (match [RIGHT_PAREN]) (parseBody name []) (do
+            args <- parseArgs name
+            parseBody name args)
+        where
+            parseArgs :: Token -> Parser [Token]
+            parseArgs name = do
+                arg <- consume IDENT $ "Expect parameter name in function def: "++show name
+                args <- loop name [arg]
+                if length args > 255 
+                    then throwError $ ParserError $ "Cannot have more than 255 args, function declaration: "++show name
+                    else return args
+            loop :: Token -> [Token] -> Parser [Token]
+            loop name args = ifM (match [COMMA]) (do
+                arg <- consume IDENT $ "Expect parameter name in function def: "++show name
+                loop name (arg:args)) (do
+                    _ <- consume RIGHT_PAREN $ "Expect ')' after parameters in function def: "++show name
+                    return args)
+            parseBody :: Token -> [Token] -> Parser Decl
+            parseBody name args = do
+                _ <- consume LEFT_BRACE $ "Expect '{' before function: "++show name ++ " body" -- block assumes '{' is consumed
+                Fn name args <$> block
+
+
 
     varDecl :: Parser VarDecl
     varDecl = do
@@ -62,6 +92,8 @@ module Parser where
         (match [IF], ite),
         (match [WHILE], whileStmt),
         (match [FOR], forStmt)] exprStmt
+
+
 
     forStmt :: Parser Stmt
     forStmt = do
@@ -132,7 +164,7 @@ module Parser where
                     else return xs
 
 
-    cond :: [(Parser Bool, Parser Stmt)] -> Parser Stmt -> Parser Stmt
+    cond :: [(Parser Bool, Parser a)] -> Parser a -> Parser a
     cond [] d = d
     cond ((c,a):xs) d = ifM c a (cond xs d)
 

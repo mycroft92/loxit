@@ -204,15 +204,12 @@ module Evaluator where
             evalArgs = foldrM (\x acc -> do
                 v <- evaluate x
                 return (v:acc)) []
-            -- evalArgs [] xs = return $ reverse xs
-            -- evalArgs (arg:args) xs = do
-            --     x <- evaluate arg
-            --     evalArgs args (x:xs)
+
     evaluate _ = undefined
 
     --this can be improved to be  a lookup in the env of FFIs but this works for now
     ffiCall :: Value -> [Value] -> Interpreter Value
-    ffiCall f@(LoxFn n a _) _ = 
+    ffiCall f@(LoxFn n _ _) _ = 
         case n of
             "clock" -> do
                 mtime <- liftIO getPOSIXTime

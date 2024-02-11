@@ -32,7 +32,8 @@ module Expr where
 
     data Decl =
         Statement Stmt
-        | Decl VarDecl deriving (Eq, Show)
+        | Decl VarDecl 
+        | Fn Token [Token] Stmt deriving (Eq, Show)
 
     data VarDecl = OnlyDecl Token | DeclE Token Expr deriving (Show, Eq) 
     

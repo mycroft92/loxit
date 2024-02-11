@@ -167,11 +167,11 @@ module Scanner (parse) where
             '\r' -> return throwaway
             '\t' -> return throwaway
             '"'  -> updateStart >> string >> return throwaway -- this weird way is for avoiding outer ""
-            _    -> cond [(C.isAlpha c, identifier),
+            _    -> cond [(C.isAlpha c || c == '_', identifier),
                             (C.isDigit c, number)] (bail $ "Illegal char \'"++[c]++"\'")
 
     identifier :: Lexer Token
-    identifier = scanWhile C.isAlphaNum >> do
+    identifier = scanWhile (\x->C.isAlphaNum x || x == '_') >> do
         st <- getState
         let s = slice (contents st) (start st) (current st) in
             case M.lookup s keywords of
