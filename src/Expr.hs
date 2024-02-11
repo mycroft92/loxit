@@ -1,10 +1,13 @@
 module Expr where
     import TokenTypes (Token (tokenType, lexeme))
 
+    data FType = FFI | UserDef deriving (Show ,Eq)
+
     data Value = 
         Number Double
         | String String
         | Bool Bool
+        | LoxFn String Int FType -- name, arity, fntype
         | Nil
         deriving (Eq)
 
@@ -38,6 +41,7 @@ module Expr where
         show (String s) = "\"" ++ s ++ "\""
         show (Bool b)   = show b
         show Nil        = "nil"
+        show (LoxFn n arity ty) = show ty++ " "++n ++ " arity: "++show arity
 
     instance Show Expr where
         show (Binary l t r) = show l ++" " ++show (tokenType t)++ " " ++ show r

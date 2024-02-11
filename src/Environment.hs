@@ -2,12 +2,15 @@ module Environment where
     import Error
     import Data.IORef ( IORef, modifyIORef', newIORef, readIORef )
     import Data.Map.Strict as Map ( Map, empty, lookup, insert, member)
-    import Expr (Value)
+    import Expr (Value (..))
 
     data Env = Env {
         e_values  :: IORef (Map.Map String Value),
         enclosing :: IORef (Maybe Env) -- stack of envs
     }
+
+
+
 
     printEnv :: Env -> IO String
     printEnv e = do

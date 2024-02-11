@@ -44,6 +44,7 @@ library
       base >=4.7 && <5
     , containers
     , mtl
+    , time
   default-language: Haskell2010
 
 executable loxit-exe
@@ -60,6 +61,7 @@ executable loxit-exe
     , containers
     , loxit
     , mtl
+    , time
   default-language: Haskell2010
 
 test-suite loxit-test
@@ -77,4 +79,5 @@ test-suite loxit-test
     , containers
     , loxit
     , mtl
+    , time
   default-language: Haskell2010

@@ -10,8 +10,8 @@ import Data.List (dropWhileEnd)
 
 import qualified Scanner  as S
 import qualified Parser as P
-import Evaluator (runInterpreter)
-import Environment (newEnv, Env)
+import Evaluator (runInterpreter, initState, InterpreterState)
+
 
 trim :: String -> String
 trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -19,14 +19,14 @@ trim = dropWhileEnd isSpace . dropWhile isSpace
 
 runFile :: String -> IO Int
 runFile s = do
-    env <- newEnv
+    env <- initState
     contents <- readFile s
     run contents s env
 
 runPrompt :: IO ()
 runPrompt = do
-    env <- newEnv
-    handler env
+    st <- initState
+    handler st
     where
         handler ev = do
             putStr "> "
@@ -37,7 +37,7 @@ runPrompt = do
                 _ <- run line "interp" ev
                 handler ev
 
-run :: String -> String -> Env -> IO Int
+run :: String -> String -> InterpreterState -> IO Int
 run contents fn env = handler $ do --This is an either monad
     res <- S.parse fn contents
     P.parse res

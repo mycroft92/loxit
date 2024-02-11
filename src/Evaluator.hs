@@ -4,7 +4,7 @@ module Evaluator where
       Expr(..),
       Stmt(..),
       Value(..),
-      VarDecl(..) )
+      VarDecl(..), FType (..) )
     import TokenTypes (Token(tokenType, lexeme),
       TokenType(..))
     import Control.Monad.State (StateT(runStateT),
@@ -12,12 +12,15 @@ module Evaluator where
       MonadState(get, put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign, createChildEnv)
+    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv)
     import Data.IORef
+    import Data.Foldable (foldrM)
+    import Data.Time.Clock.POSIX (getPOSIXTime)
 
+    
     data InterpreterState = InterpreterState {
         env :: IORef Env,
-        errors :: [InterpreterError]
+        globals :: IORef Env
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -38,6 +41,11 @@ module Evaluator where
     getEnv = do
         en  <- lift get
         liftIO $ readIORef (env en)
+
+    getGlobal :: Interpreter Env
+    getGlobal = do
+        en  <- lift get
+        liftIO $ readIORef (globals en)
 
     putEnv :: Env -> Interpreter ()
     putEnv ev = do
@@ -92,8 +100,6 @@ module Evaluator where
             Nil -> return False
             Bool b -> return b
             _   -> return True
-
-
 
     evaluate :: Expr -> Interpreter Value
     evaluate (Literal x) = return x
@@ -170,21 +176,73 @@ module Evaluator where
             Just _  -> return v
 
     evaluate (Var x) = do
-        en <- getEnv
-        v  <- liftIO $ getVar (lexeme x) en
-        case v of
-            Just val -> return val
-            Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
+        en   <- getEnv
+        glob <- getGlobal
+        catchError (findVar x en) (\e -> findVar x glob)
 
+        where
+            findVar :: Token -> Env -> Interpreter Value
+            findVar x e = do
+                v <- liftIO $ getVar (lexeme x) e
+                case v of
+                    Just val -> return val
+                    Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
+
+    evaluate (Call cl args) = do
+        fn   <- evaluate cl
+        case fn of
+            LoxFn n arity FFI -> if length args == arity 
+                then do
+                    argV <- evalArgs args
+                    ffiCall fn argV
+                else throwError $ RuntimeError $ show fn ++ " has arity different from num args supplied! \n"++ show (Call cl args)
+            LoxFn n arity UserDef -> undefined
+            _ -> throwError $ RuntimeError $ show fn ++ " is not a callable!"
+
+        -- return Nil
+        where
+            evalArgs = foldrM (\x acc -> do
+                v <- evaluate x
+                return (v:acc)) []
+            -- evalArgs [] xs = return $ reverse xs
+            -- evalArgs (arg:args) xs = do
+            --     x <- evaluate arg
+            --     evalArgs args (x:xs)
     evaluate _ = undefined
+
+    --this can be improved to be  a lookup in the env of FFIs but this works for now
+    ffiCall :: Value -> [Value] -> Interpreter Value
+    ffiCall f@(LoxFn n a _) _ = 
+        case n of
+            "clock" -> do
+                mtime <- liftIO getPOSIXTime
+                return $ Number $ fromIntegral $ (round . (*1000)) mtime
+            _  -> throwError $ RuntimeError $ show f ++ " is not a defined ffi!"
+    ffiCall f _ = throwError $ RuntimeError $ show f ++ " Invalid value for ffi!"
+
+    call :: Value -> [Value] -> Interpreter Value
+    call = undefined
 
     raiseError :: InterpreterError -> Interpreter Value
     raiseError = ExceptT . return . Left
 
-    runInterpreter :: [Decl] -> Env -> IO (Either InterpreterError Value)
-    runInterpreter e ev = do
-        nv <- newIORef ev
-        let x = runStateT (runExceptT $ declEvaluator e) $ InterpreterState nv [] in
+    mkGlobals :: IO Env
+    mkGlobals = do
+        ev <- newEnv
+        _ <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
+        return ev
+
+    initState :: IO InterpreterState
+    initState = do
+        nv   <- newEnv
+        nve <- newIORef nv
+        glob <- mkGlobals
+        globe <- newIORef glob
+        return $ InterpreterState nve globe
+
+    runInterpreter :: [Decl] -> InterpreterState -> IO (Either InterpreterError Value)
+    runInterpreter e st = do
+        let x = runStateT (runExceptT $ declEvaluator e) st in
             do
                 res <- x
                 case res of

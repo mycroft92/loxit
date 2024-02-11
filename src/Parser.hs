@@ -5,7 +5,10 @@ module Parser where
     import Expr
     -- import Control.Monad
     import Control.Monad.State
-    import Control.Monad.State(MonadIO(liftIO))
+        ( State,
+      runState,
+      MonadState(get, put),
+      MonadTrans(lift) )
     import Control.Monad.Except ( ExceptT(..), runExceptT, throwError, catchError)
 
     data ParserState = ParserState {
@@ -210,8 +213,8 @@ module Parser where
                 return $ Call expr args)
             commaCollector args = ifM (match [COMMA]) (do
                 expr <- expression
-                if length args >= 255 
-                    then throwError $ ParserError "Can't have more than 255 call arguments!" 
+                if length args >= 255
+                    then throwError $ ParserError "Can't have more than 255 call arguments!"
                     else commaCollector (expr:args))  (return args)
 
 
