@@ -88,6 +88,7 @@ module Parser where
 
     statement :: Parser Stmt
     statement = cond [(match [PRINT], printStmt),
+        (match [RETURN], retStmt),
         (match [LEFT_BRACE], block),
         (match [IF], ite),
         (match [WHILE], whileStmt),
@@ -138,7 +139,8 @@ module Parser where
         _ <- consume LEFT_PAREN "Expected '(' after 'while'."
         condition <- expression
         _ <- consume RIGHT_PAREN "Expected ')' after 'while' condition."
-        While condition . Block <$> declarations
+
+        While condition <$> statement
 
     ite :: Parser Stmt
     ite = do
@@ -171,6 +173,11 @@ module Parser where
     printStmt :: Parser Stmt
     printStmt = do
         x <- Print <$> expression
+        consumeSemi x
+    
+    retStmt :: Parser Stmt
+    retStmt = do
+        x <- Return <$> expression
         consumeSemi x
 
     consumeSemi :: a -> Parser a

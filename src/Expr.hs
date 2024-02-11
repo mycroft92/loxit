@@ -28,7 +28,8 @@ module Expr where
         | Print Expr 
         | Block [Decl] 
         | ITE Expr Stmt (Maybe Stmt) 
-        | While Expr Stmt deriving (Eq, Show)
+        | While Expr Stmt
+        | Return Expr deriving (Eq, Show)
 
     data Decl =
         Statement Stmt
@@ -55,6 +56,7 @@ module Expr where
         show  This          = "this"
         show  Super         = "super"
         show (Group e)      = "("++show e ++")"
+        
         
 
     

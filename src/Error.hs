@@ -1,5 +1,6 @@
 module Error where
     import TokenTypes (Token)
+    import Expr (Value)
     data LineInfo = LineCol Int Int String | Line Int String deriving (Eq)
     data ErrInfo  = ErrInfo LineInfo String deriving (Show, Eq)
 
@@ -18,7 +19,8 @@ module Error where
         | RuntimeError String 
         | ParserError String
         | ScannerError ErrInfo
-        | InterpreterError Token String deriving (Show, Eq)
+        | InterpreterError Token String 
+        | ReturnException Value deriving (Show, Eq)
 
     ifM :: Monad m => m Bool -> m a -> m a -> m a
     ifM bt m_t m_f = do

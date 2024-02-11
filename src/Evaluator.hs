@@ -104,6 +104,10 @@ module Evaluator where
     -- this doesn't return last statement value for now
     stmtEval (While bc st) = ifM (isTruthy bc) (stmtEval st >> stmtEval (While bc st)) (return Nil)
 
+    stmtEval (Return e) = do
+        v <- evaluate e
+        throwError $ ReturnException v
+
 
     isTruthy :: Expr -> Interpreter Bool
     isTruthy e = do
@@ -210,7 +214,10 @@ module Evaluator where
             LoxFn _ arity UserDef -> if length args == arity
                 then do
                     argV <- evalArgs args
-                    call fn argV
+                    catchError (call fn argV) (\e ->
+                        case e of
+                            ReturnException v -> return v
+                            _ -> throwError e)
                 else throwError $ RuntimeError $ show fn ++ " has arity different from num args supplied! \n"++ show (Call cl args)
             _ -> throwError $ RuntimeError $ show fn ++ " is not a callable!"
 
