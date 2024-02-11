@@ -1,6 +1,6 @@
 fun cnt_dn (x) {
     if (x <= 0) 0;
-    else { print x; cnt_dn(x-1);}
+    else { print x; cnt_dn(x-1); }
 }
 
 cnt_dn(10);

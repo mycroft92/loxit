@@ -10,10 +10,18 @@ fun fib(n) {
         num2 = next;
         next = num2+num1;
     }
-    return next;
+    return num1;
+}
+
+fun fib2(n) {
+    if (n == 0) return 0;
+    if (n <= 1) return 1;
+    return (fib2 (n-1)+fib2(n-2));
+
 }
 
 print fib(4);
 
 print fib(5);
-print fib(20);
+print fib2(20);
+print fib(17);
