@@ -1,7 +1,7 @@
 module Expr where
     import TokenTypes (Token (tokenType, lexeme))
 
-    data FType = FFI | UserDef deriving (Show ,Eq)
+    data FType = FFI | UserDef deriving (Show ,Eq, Ord)
 
     data Value = 
         Number Double
@@ -9,7 +9,7 @@ module Expr where
         | Bool Bool
         | LoxFn String Int FType -- name, arity, fntype
         | Nil
-        deriving (Eq)
+        deriving (Eq, Ord)
 
     data Expr = 
         Binary Expr Token Expr

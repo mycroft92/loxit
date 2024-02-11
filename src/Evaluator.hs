@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 module Evaluator where
     import Error (InterpreterError(..), ifM)
     import Expr (Decl(..),
@@ -9,18 +10,20 @@ module Evaluator where
       TokenType(..))
     import Control.Monad.State (StateT(runStateT),
       MonadIO(liftIO),
-      MonadState(get, put),
+      MonadState(get,put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv)
+    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv, printEnv)
     import Data.IORef
     import Data.Foldable (foldrM)
     import Data.Time.Clock.POSIX (getPOSIXTime)
+    import Data.Map.Strict as Map
 
     
     data InterpreterState = InterpreterState {
         env :: IORef Env,
-        globals :: IORef Env
+        -- globals :: IORef Env, -- why is this problematic with IOREFs?
+        functionEnvs :: Map.Map Value (Env, Decl)
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -37,15 +40,24 @@ module Evaluator where
     declEval (Statement s) = stmtEval s
     declEval (Decl v)      = varDeclEval v
 
+    declEval f@(Fn name args _) = do
+        st <- lift get
+        env <- getEnv
+        let func = LoxFn (lexeme name) (length args) UserDef
+        _  <- liftIO $ define (lexeme name) func env
+        let fenv' =  Map.insert func (env, f) (functionEnvs st)
+        _  <- lift $ put $ st {functionEnvs = fenv'}
+        return func
+
     getEnv :: Interpreter Env
     getEnv = do
         en  <- lift get
         liftIO $ readIORef (env en)
-
-    getGlobal :: Interpreter Env
-    getGlobal = do
-        en  <- lift get
-        liftIO $ readIORef (globals en)
+    
+    getFenv :: Interpreter (Map.Map Value (Env, Decl))
+    getFenv = do
+        st <- lift get
+        return (functionEnvs st)
 
     putEnv :: Env -> Interpreter ()
     putEnv ev = do
@@ -177,8 +189,7 @@ module Evaluator where
 
     evaluate (Var x) = do
         en   <- getEnv
-        glob <- getGlobal
-        catchError (findVar x en) (\e -> findVar x glob)
+        findVar x en
 
         where
             findVar :: Token -> Env -> Interpreter Value
@@ -191,12 +202,16 @@ module Evaluator where
     evaluate (Call cl args) = do
         fn   <- evaluate cl
         case fn of
-            LoxFn n arity FFI -> if length args == arity 
+            LoxFn _ arity FFI -> if length args == arity 
                 then do
                     argV <- evalArgs args
                     ffiCall fn argV
                 else throwError $ RuntimeError $ show fn ++ " has arity different from num args supplied! \n"++ show (Call cl args)
-            LoxFn n arity UserDef -> undefined
+            LoxFn _ arity UserDef -> if length args == arity
+                then do
+                    argV <- evalArgs args
+                    call fn argV
+                else throwError $ RuntimeError $ show fn ++ " has arity different from num args supplied! \n"++ show (Call cl args)
             _ -> throwError $ RuntimeError $ show fn ++ " is not a callable!"
 
         -- return Nil
@@ -218,7 +233,29 @@ module Evaluator where
     ffiCall f _ = throwError $ RuntimeError $ show f ++ " Invalid value for ffi!"
 
     call :: Value -> [Value] -> Interpreter Value
-    call = undefined
+    call f@(LoxFn n a _) argV = do
+        fenv <- getFenv
+        case Map.lookup f fenv of
+            Nothing -> throwError $ RuntimeError $ "Undefined function: "++show f
+            Just (e, Fn _ argT stmt) -> do
+                en <- getEnv
+                e' <- liftIO $ createChildEnv e
+                _ <- putEnv e'
+                _ <- defineArgs argT argV e'
+                v <- stmtEval stmt
+                _ <- putEnv en
+                return v
+            Just (_, s) -> throwError $ RuntimeError $ "Illegal values in function env for: "++show f ++ " val: " ++ show s
+            where
+                defineArgs :: [Token] -> [Value] -> Env -> Interpreter ()
+                defineArgs (t:ts) (v:vs) e = do
+                    _ <- liftIO $ define (lexeme t) v e
+                    defineArgs ts vs e
+                defineArgs [] [] _ = return ()
+                defineArgs _ _ _ = throwError $ RuntimeError "Impossible situation, number of args not same as values"
+
+    call e _ = throwError $ RuntimeError $ "Invalid callable: "++show e++"!"
+
 
     raiseError :: InterpreterError -> Interpreter Value
     raiseError = ExceptT . return . Left
@@ -231,11 +268,9 @@ module Evaluator where
 
     initState :: IO InterpreterState
     initState = do
-        nv   <- newEnv
-        nve <- newIORef nv
         glob <- mkGlobals
         globe <- newIORef glob
-        return $ InterpreterState nve globe
+        return $ InterpreterState globe Map.empty
 
     runInterpreter :: [Decl] -> InterpreterState -> IO (Either InterpreterError Value)
     runInterpreter e st = do
@@ -245,3 +280,16 @@ module Evaluator where
                 case res of
                     (Left err, _) -> return $ Left err
                     (Right  x, _) -> return $ Right x
+    
+    interpret :: [Decl] -> InterpreterState -> IO InterpreterState
+    interpret decl st = do
+        let x = runStateT (runExceptT $ declEvaluator decl) st in
+            do
+                res <- x
+                case res of
+                    (Left err, st) -> do
+                        print err
+                        return st
+                    (Right  x, st) -> do
+                        print x
+                        return st

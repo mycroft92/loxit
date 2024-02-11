@@ -7,10 +7,10 @@ module Lib
 import Data.Char (isSpace)
 import Data.List (dropWhileEnd)
 -- import System.IO
-
+import Expr (Decl)
 import qualified Scanner  as S
 import qualified Parser as P
-import Evaluator (runInterpreter, initState, InterpreterState)
+import Evaluator (runInterpreter, initState, InterpreterState, interpret)
 
 
 trim :: String -> String
@@ -21,7 +21,11 @@ runFile :: String -> IO Int
 runFile s = do
     env <- initState
     contents <- readFile s
-    run contents s env
+    decl <- runParser contents s
+    res <- runInterpreter decl env
+    case res of
+        Left err -> print err >> return 1
+        Right x  -> print x >> return 0
 
 runPrompt :: IO ()
 runPrompt = do
@@ -34,21 +38,17 @@ runPrompt = do
             if trim line == "" then
                 return ()
             else do
-                _ <- run line "interp" ev
-                handler ev
+                decl <- runParser line "interp"
+                st' <- interpret decl ev
+                handler st'
 
-run :: String -> String -> InterpreterState -> IO Int
-run contents fn env = handler $ do --This is an either monad
+runParser :: String -> String -> IO [Decl]
+runParser contents fn = handler $ do --This is an either monad
     res <- S.parse fn contents
     P.parse res
     where --IO monad comes here
-        handler (Left es)     = mapM_ print es >> return 1
-        handler (Right expr) = do 
-            x <- runInterpreter expr env
-            print x
-            case x of
-                Left _ -> return 1
-                _ -> return 0
+        handler (Left es)     = mapM_ print es >> return []
+        handler (Right expr) = return expr
 
     
 

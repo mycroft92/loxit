@@ -1,0 +1,15 @@
+var x =1;
+{
+    var z = x+3;
+    var x = 5;
+    print x;
+    print z;
+}
+
+print x;
+
+fun add(a,b,c) {
+    print a+b+c;
+}
+print ("hello world");
+add(1,2,3);

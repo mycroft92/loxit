@@ -15,8 +15,12 @@ module Environment where
     printEnv :: Env -> IO String
     printEnv e = do
         ev <- readIORef (e_values e)
-        print ev
-        return $ show ev
+        enc <- readIORef (enclosing e)
+        case enc of
+            Nothing -> return $ show ev
+            Just e' -> do
+                p <- printEnv e'
+                return $ p ++ "\n\t"++show ev
 
     newEnv :: IO Env
     newEnv = do
@@ -29,6 +33,15 @@ module Environment where
         ev  <- newIORef Map.empty
         enc <- newIORef $ Just env
         return $ Env ev enc
+    
+    nestEnvUnder :: Env -> Env -> IO Env
+    nestEnvUnder s p = do
+        ev <- readIORef (enclosing s)
+        case ev of 
+            Just s' -> nestEnvUnder s' p
+            Nothing -> do
+                enc <- newIORef (Just p)
+                return $ Env (e_values s) enc
 
     define :: String -> Value -> Env -> IO ()
     define name val env = modifyIORef' (e_values env)  (Map.insert name val)
@@ -45,6 +58,9 @@ module Environment where
     getVar vnam env = do
         m   <- readIORef (e_values env)
         enc <- readIORef (enclosing env)
+        -- print "Searching current"
+        -- s <- printEnv env
+        -- print s
         case Map.lookup vnam m of
             Nothing -> case enc of
                             Nothing -> return Nothing
