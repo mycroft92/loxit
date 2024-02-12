@@ -1,0 +1,9 @@
+fun get(name) {
+
+    fun myprint() {
+        print ("hello "+name);
+    }
+    return myprint;
+}
+
+get("Madhukar")();
