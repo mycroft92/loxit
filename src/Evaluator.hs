@@ -92,7 +92,7 @@ module Evaluator where
             v <- declEvaluator ds
             putEnv previous
             return v) (\e -> do
-                liftIO $ print e -- this would be stack trace
+                -- liftIO $ print e -- this would be stack trace
                 putEnv previous
                 throwError e)
 
@@ -214,10 +214,9 @@ module Evaluator where
             LoxFn _ arity UserDef -> if length args == arity
                 then do
                     argV <- evalArgs args
-                    catchError (call fn argV) (\e ->
-                        case e of
-                            ReturnException v -> return v
-                            _ -> throwError e)
+                    -- liftIO $ print $ "Args to :"++show cl
+                    -- liftIO $ mapM_ print argV
+                    call fn argV
                 else throwError $ RuntimeError $ show fn ++ " has arity different from num args supplied! \n"++ show (Call cl args)
             _ -> throwError $ RuntimeError $ show fn ++ " is not a callable!"
 
@@ -249,9 +248,17 @@ module Evaluator where
                 e' <- liftIO $ createChildEnv e
                 _ <- putEnv e'
                 _ <- defineArgs argT argV e'
-                v <- stmtEval stmt
-                _ <- putEnv en
-                return v
+                catchError (do  --if it is a return we need to handle it here and restore the env
+                    v <- stmtEval stmt
+                    _ <- putEnv en
+                    return v) (\e -> 
+                        case e of
+                            ReturnException v -> do
+                                _ <- putEnv en
+                                return v
+                            _ -> do
+                                putEnv en
+                                throwError e)
             Just (_, s) -> throwError $ RuntimeError $ "Illegal values in function env for: "++show f ++ " val: " ++ show s
             where
                 defineArgs :: [Token] -> [Value] -> Env -> Interpreter ()
