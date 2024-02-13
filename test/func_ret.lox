@@ -6,4 +6,6 @@ fun get(name) {
     return myprint;
 }
 
-get("Madhukar")();
+var func = get("Madhukar");
+
+func();
