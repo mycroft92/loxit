@@ -29,7 +29,7 @@ module Evaluator where
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
 
 
-    declEvaluator:: [Decl] -> Interpreter Value
+    declEvaluator :: [Decl] -> Interpreter Value
     declEvaluator []     = return Nil
     declEvaluator [x]    = declEval x
     declEvaluator (x:xs) = do
