@@ -13,7 +13,7 @@ module Evaluator where
       MonadState(get,put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv, printEnv)
+    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv) -- printEnv)
     import Data.IORef
     import Data.Foldable (foldrM)
     import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -21,7 +21,7 @@ module Evaluator where
 
     
     data InterpreterState = InterpreterState {
-        env :: IORef Env,
+        env          :: IORef Env,
         -- globals :: IORef Env, -- why is this problematic with IOREFs?
         functionEnvs :: Map.Map Value (Env, Decl)
     }
@@ -42,36 +42,36 @@ module Evaluator where
 
     declEval f@(Fn name args _) = do
         st <- lift get
-        env <- getEnv
+        env <- _getEnv
         let func = LoxFn (lexeme name) (length args) UserDef
         _  <- liftIO $ define (lexeme name) func env
         let fenv' =  Map.insert func (env, f) (functionEnvs st)
         _  <- lift $ put $ st {functionEnvs = fenv'}
         return func
 
-    getEnv :: Interpreter Env
-    getEnv = do
+    _getEnv :: Interpreter Env
+    _getEnv = do
         en  <- lift get
         liftIO $ readIORef (env en)
     
-    getFenv :: Interpreter (Map.Map Value (Env, Decl))
-    getFenv = do
+    _getFenv :: Interpreter (Map.Map Value (Env, Decl))
+    _getFenv = do
         st <- lift get
         return (functionEnvs st)
 
-    putEnv :: Env -> Interpreter ()
-    putEnv ev = do
+    _putEnv :: Env -> Interpreter ()
+    _putEnv ev = do
         x <- lift get
         liftIO $ writeIORef (env x) ev
 
     varDeclEval :: VarDecl -> Interpreter Value
     varDeclEval (OnlyDecl v) = do
-        x <- getEnv
+        x <- _getEnv
         _ <- liftIO $ define (lexeme v) Nil x
         return Nil
 
     varDeclEval (DeclE v e) = do
-        x   <- getEnv
+        x   <- _getEnv
         val <- evaluate e
         _ <- liftIO $ define (lexeme v) val x
         return val
@@ -85,19 +85,19 @@ module Evaluator where
     stmtEval (Expression e) = evaluate e
 
     stmtEval (Block ds)  = do
-        previous <- getEnv
+        previous <- _getEnv
         new_env <- liftIO $ createChildEnv previous
-        putEnv new_env
+        _putEnv new_env
         catchError (do
             v <- declEvaluator ds
-            putEnv previous
+            _putEnv previous
             return v) (\e -> do
                 -- liftIO $ print e -- this would be stack trace
-                putEnv previous
+                _putEnv previous
                 throwError e)
 
     stmtEval (ITE bc t mf) =
-        ifM (isTruthy bc) (stmtEval t) (
+        ifM  (isTruthy bc) (stmtEval t) (
             case mf of
                 Nothing -> return Nil
                 Just s  -> stmtEval s)
@@ -184,7 +184,7 @@ module Evaluator where
             _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr
 
     evaluate (Assign x e) = do
-        en <- getEnv
+        en <- _getEnv
         v  <- evaluate e
         b  <- liftIO $ assign (lexeme x) v en
         case b of
@@ -192,7 +192,7 @@ module Evaluator where
             Just _  -> return v
 
     evaluate (Var x) = do
-        en   <- getEnv
+        en   <- _getEnv
         findVar x en
 
         where
@@ -240,24 +240,24 @@ module Evaluator where
 
     call :: Value -> [Value] -> Interpreter Value
     call f@(LoxFn n a _) argV = do
-        fenv <- getFenv
+        fenv <- _getFenv
         case Map.lookup f fenv of
             Nothing -> throwError $ RuntimeError $ "Undefined function: "++show f
             Just (e, Fn _ argT stmt) -> do
-                en <- getEnv
+                en <- _getEnv
                 e' <- liftIO $ createChildEnv e
-                _ <- putEnv e'
-                _ <- defineArgs argT argV e'
+                _  <- _putEnv e'
+                _  <- defineArgs argT argV e'
                 catchError (do  --if it is a return we need to handle it here and restore the env
                     v <- stmtEval stmt
-                    _ <- putEnv en
+                    _ <- _putEnv en
                     return v) (\e -> 
                         case e of
                             ReturnException v -> do
-                                _ <- putEnv en
+                                _ <- _putEnv en
                                 return v
                             _ -> do
-                                putEnv en
+                                _putEnv en
                                 throwError e)
             Just (_, s) -> throwError $ RuntimeError $ "Illegal values in function env for: "++show f ++ " val: " ++ show s
             where
@@ -277,7 +277,7 @@ module Evaluator where
     mkGlobals :: IO Env
     mkGlobals = do
         ev <- newEnv
-        _ <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
+        _  <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
         return ev
 
     initState :: IO InterpreterState
