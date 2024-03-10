@@ -9,9 +9,6 @@ module Environment where
         enclosing :: IORef (Maybe Env) -- stack of envs
     }
 
-
-
-
     printEnv :: Env -> IO String
     printEnv e = do
         ev <- readIORef (e_values e)

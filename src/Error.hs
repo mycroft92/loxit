@@ -15,7 +15,8 @@ module Error where
     makeErrCol fn l c = ErrInfo (LineCol l c fn)
 
     data InterpreterError = 
-        Unexpected 
+        Unexpected
+	| ResolverError String 
         | RuntimeError String 
         | ParserError String
         | ScannerError ErrInfo

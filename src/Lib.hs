@@ -10,6 +10,7 @@ import Data.List (dropWhileEnd)
 import Expr (Decl)
 import qualified Scanner  as S
 import qualified Parser as P
+import Resolver
 import Evaluator (runInterpreter, initState, InterpreterState, interpret)
 
 

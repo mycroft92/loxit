@@ -31,7 +31,9 @@ library
       Expr
       Lib
       Parser
+      Resolver
       Scanner
+      Stack
       TokenTypes
   other-modules:
       Paths_loxit
