@@ -56,7 +56,3 @@ module Expr where
         show  This          = "this"
         show  Super         = "super"
         show (Group e)      = "("++show e ++")"
-        
-        
-
-    

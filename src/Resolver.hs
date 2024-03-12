@@ -25,9 +25,9 @@ module Resolver where
     _getLocals = do
         st <- lift get
         return (locals st)
+    
     _isEmpty   :: Resolver Bool
-    _isEmpty = do
-        isEmpty <$> _getLocals
+    _isEmpty = isEmpty <$> _getLocals
 
     _putLocals :: Locals -> Resolver ()
     _putLocals l = do
@@ -37,7 +37,7 @@ module Resolver where
     _beginScope :: Resolver ()
     _beginScope = do
         lc <- _getLocals
-        _putLocals (Push Map.empty lc)
+        _putLocals (push Map.empty lc)
 
     _endScope :: Resolver ()
     _endScope = do
@@ -66,18 +66,36 @@ module Resolver where
         define x
     resolveVarDecl (OnlyDecl x) = declare x >> define x
 
+
+    currentScope :: Resolver (Maybe (Map.Map String Bool))
+    currentScope = do
+        lc <- _getLocals
+        case pop lc of
+            Just (sc, st) -> return $ Just sc
+            Nothing   -> return Nothing
+
+
+    -- Not empty safe
     putInScope :: String -> Bool -> Resolver ()
     putInScope x p = do
         lc <- _getLocals
         let (scope, stack) = (fromJust . pop) lc in
             let scope' = Map.insert x p scope in
                 _putLocals (push scope' stack)
+    
+
+    peekInScope :: String -> Resolver (Maybe Bool)
+    peekInScope x = do
+        current <- currentScope
+        case current of
+            Just c  -> return (Map.lookup x c)
+            Nothing -> return Nothing
 
     declare :: Token -> Resolver ()
-    declare = undefined
+    declare tk = ifM _isEmpty (return ()) (putInScope (lexeme tk) False)
 
     define :: Token -> Resolver ()
-    define = undefined
+    define tk = ifM _isEmpty (return ()) (putInScope (lexeme tk) True)
 
 
     resolveStmt :: Stmt -> Resolver ()
@@ -91,4 +109,15 @@ module Resolver where
 
 
     resolveExpr :: Expr -> Resolver ()
-    resolveExpr _ = return ()
+    resolveExpr (Binary e1 _ e2) = resolveExpr e1 >> resolveExpr e2
+    resolveExpr (Log e1 _ e2)    = resolveExpr e1 >> resolveExpr e2
+    resolveExpr (Unary _ e)      = resolveExpr e
+    resolveExpr (Var tk)         =
+        do
+            s <- peekInScope (lexeme tk)
+            case s of
+                Just False -> throwError $ ResolverError $ "Can't read local variable in its own initializer: "++ show tk
+                _          -> resolveLocal tk
+
+    resolveLocal :: Token -> Resolver ()
+    resolveLocal tk = undefined
