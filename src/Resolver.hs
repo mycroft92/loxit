@@ -1,4 +1,5 @@
 module Resolver where
+    import TokenTypes
     import Expr
     import Error
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
@@ -9,7 +10,8 @@ module Resolver where
     import Data.Map.Strict as Map
     import Data.Foldable (forM_)
     import Stack
-
+    import Data.Maybe (fromJust)
+    
     type Locals =  Stack (Map.Map String Bool)
 
     data ResolverState = ResolverState {
@@ -23,6 +25,9 @@ module Resolver where
     _getLocals = do
         st <- lift get
         return (locals st)
+    _isEmpty   :: Resolver Bool
+    _isEmpty = do
+        isEmpty <$> _getLocals
 
     _putLocals :: Locals -> Resolver ()
     _putLocals l = do
@@ -55,15 +60,33 @@ module Resolver where
                                 = undefined
 
     resolveVarDecl :: VarDecl -> Resolver ()
-    resolveVarDecl v = undefined
+    resolveVarDecl (DeclE x e) = do
+        declare x
+        resolveExpr e
+        define x
+    resolveVarDecl (OnlyDecl x) = declare x >> define x
+
+    putInScope :: String -> Bool -> Resolver ()
+    putInScope x p = do
+        lc <- _getLocals
+        let (scope, stack) = (fromJust . pop) lc in
+            let scope' = Map.insert x p scope in
+                _putLocals (push scope' stack)
+
+    declare :: Token -> Resolver ()
+    declare = undefined
+
+    define :: Token -> Resolver ()
+    define = undefined
+
 
     resolveStmt :: Stmt -> Resolver ()
     resolveStmt (Block d) = do
         _beginScope
         resolveDecls d
         _endScope
-    resolveStmt (While _ s)   = resolveStmt s
-    resolveStmt (ITE _ s1 s2) = resolveStmt s1 >> forM_ s2 resolveStmt
+    resolveStmt (While e s)   = resolveExpr e >> resolveStmt s
+    resolveStmt (ITE e s1 s2) = resolveExpr e >> (resolveStmt s1 >> forM_ s2 resolveStmt)
     resolveStmt _ = undefined
 
 
