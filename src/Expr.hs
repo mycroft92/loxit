@@ -21,7 +21,7 @@ module Expr where
         | Call Expr [Expr] -- calling function, args
         | This
         | Super     
-        | Group Expr deriving (Eq)
+        | Group Expr deriving (Eq, Ord)
 
     data Stmt = 
         Expression Expr

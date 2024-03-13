@@ -44,14 +44,14 @@ module TokenTypes where
         | WHILE
         | EOF 
         -- -- Throwaway token for comment/whitespace
-        | WS deriving (Show, Eq)
+        | WS deriving (Show, Eq, Ord)
 
     data Token = Token {
         tokenType :: TokenType,
         lexeme    :: String,
         st        :: Int,
         len       :: Int
-    } deriving (Show, Eq)
+    } deriving (Show, Eq, Ord)
     
     makeEOF :: Token
     makeEOF = Token { tokenType = EOF, lexeme ="\0", st = 0, len=0}
