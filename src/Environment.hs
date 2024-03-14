@@ -64,6 +64,15 @@ module Environment where
                             Just ev -> getVar vnam ev
             Just x  -> return $ Just x 
 
+    readEnvAt :: Int -> Env -> IO (Maybe Env)
+    readEnvAt 0 e = return . Just $ e
+    readEnvAt d e = do
+        enc <- readIORef (enclosing e)
+        case enc of
+            Nothing   -> return Nothing
+            Just enc' -> readEnvAt (d-1) enc'
+
+
     isMember :: String -> Env -> IO Bool
     isMember x e = do
         m <- readIORef (e_values e)

@@ -13,17 +13,18 @@ module Evaluator where
       MonadState(get,put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv) -- printEnv)
+    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv, readEnvAt, printEnv)
     import Data.IORef
     import Data.Foldable (foldrM)
     import Data.Time.Clock.POSIX (getPOSIXTime)
     import Data.Map.Strict as Map
 
-    
+
     data InterpreterState = InterpreterState {
         env          :: IORef Env,
-        -- globals :: IORef Env, -- why is this problematic with IOREFs?
-        functionEnvs :: Map.Map Value (Env, Decl)
+        globals      :: IORef Env,   -- why is this problematic with IOREFs?
+        functionEnvs :: Map.Map Value (Env, Decl),
+        locals       :: Map.Map Expr Int
     }
 
     type Interpreter a = ExceptT InterpreterError (StateT InterpreterState IO) a
@@ -53,7 +54,17 @@ module Evaluator where
     _getEnv = do
         en  <- lift get
         liftIO $ readIORef (env en)
-    
+
+    _getGlobal :: Interpreter Env
+    _getGlobal = do
+        en  <- lift get
+        liftIO $ readIORef (globals en)
+
+    _getLocals :: Interpreter (Map.Map Expr Int)
+    _getLocals = do
+        st <- lift get
+        return (locals st)
+
     _getFenv :: Interpreter (Map.Map Value (Env, Decl))
     _getFenv = do
         st <- lift get
@@ -183,30 +194,34 @@ module Evaluator where
                     _      -> return $ Bool True --raiseError $ RuntimeError $ "Undefined operation ! on: "++ show expr 
             _     -> raiseError $ RuntimeError $ "Undefined operation" ++ show (tokenType tok) ++" on: "++ show expr
 
-    evaluate (Assign x e) = do
-        en <- _getEnv
-        v  <- evaluate e
-        b  <- liftIO $ assign (lexeme x) v en
-        case b of
-            Nothing -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in assign expression: "++ show (Assign x e)
-            Just _  -> return v
-
-    evaluate (Var x) = do
+    evaluate e'@(Assign x e) = do
+        v    <- evaluate e
+        dist <- lookupLocal e'
         en   <- _getEnv
-        findVar x en
-
+        handle dist (lexeme x) v en
         where
-            findVar :: Token -> Env -> Interpreter Value
-            findVar x e = do
-                v <- liftIO $ getVar (lexeme x) e
-                case v of
-                    Just val -> return val
-                    Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
+            handle :: Maybe Int -> String -> Value -> Env -> Interpreter Value
+            handle dist x v e = 
+                case dist of
+                    Nothing -> _getGlobal >>= \s -> liftIO $ assign x v s >> return v
+                    Just d  -> do
+                        maybenv' <- liftIO $ readEnvAt d e
+                        case maybenv' of
+                            Nothing -> throwError $ RuntimeError $ "No env at dist:" ++ show dist ++" while searching for var"++show x
+                            Just e' -> liftIO $ assign x v e' >> return v 
+
+    evaluate e'@(Var x) = do
+        en   <- _getEnv
+        dist <- lookupLocal e'
+        liftIO $ putStrLn $ "Looking up "++show e' ++ " at dist:"++show dist
+        case dist of
+            Just d  -> findVarAt x d en
+            Nothing -> findVar x en
 
     evaluate (Call cl args) = do
         fn   <- evaluate cl
         case fn of
-            LoxFn _ arity FFI -> if length args == arity 
+            LoxFn _ arity FFI -> if length args == arity
                 then do
                     argV <- evalArgs args
                     ffiCall fn argV
@@ -227,10 +242,26 @@ module Evaluator where
                 return (v:acc)) []
 
     evaluate _ = undefined
+    
+    findVar :: Token -> Env -> Interpreter Value
+    findVar x env' = do
+        v <- liftIO $ getVar (lexeme x) env'
+        case v of
+            Just val -> return val
+            Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
+    findVarAt :: Token -> Int -> Env -> Interpreter Value
+    findVarAt x dist env' = do
+        env'' <- liftIO $ readEnvAt dist env'
+        case env'' of
+            Nothing -> throwError $ RuntimeError $ "No env at dist:" ++ show dist ++" while searching for var"++show x
+            Just env'' -> findVar x env''
+    
+    lookupLocal :: Expr -> Interpreter (Maybe Int)
+    lookupLocal e = Map.lookup e <$> _getLocals
 
     --this can be improved to be  a lookup in the env of FFIs but this works for now
     ffiCall :: Value -> [Value] -> Interpreter Value
-    ffiCall f@(LoxFn n _ _) _ = 
+    ffiCall f@(LoxFn n _ _) _ =
         case n of
             "clock" -> do
                 mtime <- liftIO getPOSIXTime
@@ -251,7 +282,7 @@ module Evaluator where
                 catchError (do  --if it is a return we need to handle it here and restore the env
                     v <- stmtEval stmt
                     _ <- _putEnv en
-                    return v) (\e -> 
+                    return v) (\e ->
                         case e of
                             ReturnException v -> do
                                 _ <- _putEnv en
@@ -280,11 +311,11 @@ module Evaluator where
         _  <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
         return ev
 
-    initState :: IO InterpreterState
-    initState = do
+    initState :: Map.Map Expr Int -> IO InterpreterState
+    initState m = do
         glob <- mkGlobals
         globe <- newIORef glob
-        return $ InterpreterState globe Map.empty
+        return $ InterpreterState globe globe Map.empty m
 
     runInterpreter :: [Decl] -> InterpreterState -> IO (Either InterpreterError Value)
     runInterpreter e st = do
@@ -294,7 +325,7 @@ module Evaluator where
                 case res of
                     (Left err, _) -> return $ Left err
                     (Right  x, _) -> return $ Right x
-    
+
     interpret :: [Decl] -> InterpreterState -> IO InterpreterState
     interpret decl st = do
         let x = runStateT (runExceptT $ declEvaluator decl) st in

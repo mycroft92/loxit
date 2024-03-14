@@ -11,7 +11,8 @@ import Expr (Decl)
 import qualified Scanner  as S
 import qualified Parser as P
 import Resolver
-import Evaluator (runInterpreter, initState, InterpreterState, interpret)
+import Evaluator (runInterpreter, initState, interpret)
+import Data.Map.Strict as Map (empty)
 
 
 trim :: String -> String
@@ -20,17 +21,22 @@ trim = dropWhileEnd isSpace . dropWhile isSpace
 
 runFile :: String -> IO Int
 runFile s = do
-    env <- initState
+    
     contents <- readFile s
     decl <- runParser contents s
-    res <- runInterpreter decl env
-    case res of
+    case runResolver decl of
         Left err -> print err >> return 1
-        Right x  -> print x >> return 0
+        Right m' -> do
+            mapM_ print m'
+            env <- initState m'
+            res <- runInterpreter decl env
+            case res of
+                Left err -> print err >> return 1
+                Right x  -> print x >> return 0
 
 runPrompt :: IO ()
 runPrompt = do
-    st <- initState
+    st <- initState Map.empty
     handler st
     where
         handler ev = do

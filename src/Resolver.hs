@@ -1,17 +1,17 @@
-module Resolver where
+module Resolver (runResolver) where
     import TokenTypes
     import Expr
     import Error
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Control.Monad.State (StateT(runStateT),
-        MonadIO(liftIO),
-        MonadState(get,put),
-        MonadTrans(lift))
+    import Control.Monad.State  (State,
+      runState,
+      MonadState(get, put),
+      MonadTrans(lift) )
     import Data.Map.Strict as Map
     import Data.Foldable (forM_, foldr)
     import Stack
     import Data.Maybe (fromJust)
-    
+
     type Scopes =  Stack (Map.Map String Bool)
     type Locals = Map.Map Expr Int
 
@@ -21,22 +21,22 @@ module Resolver where
     }
 
     -- running runExceptT on this gives StateT ResolverState IO (Either InterpreterError a)  
-    type Resolver a = ExceptT InterpreterError (StateT ResolverState IO) a
+    type Resolver a = ExceptT InterpreterError (State ResolverState) a
 
     _getScopes :: Resolver Scopes
     _getScopes = do
         st <- lift get
         return (scopes st)
-    
+
     _getLocals :: Resolver Locals
     _getLocals = do
         st <- lift get
         return (locals st)
-    
+
     _putLocals :: Locals -> Resolver ()
     _putLocals lc = do
         st <- lift get
-        lift $ put (st {locals = lc}) 
+        lift $ put (st {locals = lc})
 
     _isEmpty   :: Resolver Bool
     _isEmpty = isEmpty <$> _getScopes
@@ -107,7 +107,7 @@ module Resolver where
         let (scope, stack) = (fromJust . pop) lc in
             let scope' = Map.insert x p scope in
                 _putScopes (push scope' stack)
-    
+
 
     peekInScope :: String -> Resolver (Maybe Bool)
     peekInScope x = do
@@ -123,16 +123,14 @@ module Resolver where
     define tk = ifM _isEmpty (return ()) (putInScope (lexeme tk) True)
 
     checkKey :: String -> Resolver (Maybe Int)
-    checkKey x = do
-        scopelist <- _getScopes
-        return $ snd (Data.Foldable.foldr handle (0,Nothing) scopelist) 
+    checkKey x =  snd . Data.Foldable.foldr handle (0,Nothing) <$> _getScopes
 
         where
             handle :: Map.Map String Bool -> (Int, Maybe Int) -> (Int, Maybe Int)
-            handle scope acc@(n,acc') = 
+            handle scope acc@(n,acc') =
                 case acc' of
-                    Nothing -> case (Map.lookup x scope) of
-                        Just _  -> (n, Just n) 
+                    Nothing -> case Map.lookup x scope of
+                        Just _  -> (n, Just n)
                         Nothing -> (n+1, Nothing)
                     _ -> acc
 
@@ -171,8 +169,12 @@ module Resolver where
     resolveLocal :: Expr -> Token -> Resolver ()
     resolveLocal expr tk = do
         val <- checkKey (lexeme tk)
-        case val of
-            Nothing -> return ()
-            Just v  -> _addExpr expr v
+        forM_ val (_addExpr expr)
+    
 
+    runResolver :: [Decl] -> Either InterpreterError (Map.Map Expr Int)
+    runResolver decls = 
+        case  runState (runExceptT $ resolveDecls decls) (ResolverState [] Map.empty) of
+            (Left err, _) -> Left err
+            (Right _, st) -> Right (locals st)
     -- lookupVariable :: Token -> Expr -> 
