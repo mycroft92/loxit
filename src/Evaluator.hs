@@ -13,7 +13,7 @@ module Evaluator where
       MonadState(get,put),
       MonadTrans(lift))
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Environment (Env (..), define, getVar, assign, createChildEnv, newEnv, readEnvAt, printEnv)
+    import Environment (Env (..), define, getVar, getVarEnv, assign, createChildEnv, newEnv, readEnvAt, printEnv)
     import Data.IORef
     import Data.Foldable (foldrM)
     import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -212,11 +212,15 @@ module Evaluator where
 
     evaluate e'@(Var x) = do
         en   <- _getEnv
+        g    <- _getGlobal
         dist <- lookupLocal e'
         liftIO $ putStrLn $ "Looking up "++show e' ++ " at dist:"++show dist
+        -- liftIO $ printEnv g
         case dist of
             Just d  -> findVarAt x d en
-            Nothing -> findVar x en
+            Nothing -> do
+                -- liftIO $ printEnv g
+                findVar x g
 
     evaluate (Call cl args) = do
         fn   <- evaluate cl
@@ -245,7 +249,9 @@ module Evaluator where
     
     findVar :: Token -> Env -> Interpreter Value
     findVar x env' = do
-        v <- liftIO $ getVar (lexeme x) env'
+        liftIO $ print  $" search for " ++ lexeme x ++ " in "
+        liftIO $ printEnv env'
+        v <- liftIO $ getVarEnv (lexeme x) env'
         case v of
             Just val -> return val
             Nothing  -> throwError $ RuntimeError $ "Undefined variable: "++ lexeme x ++ " in "++ show x
@@ -309,6 +315,7 @@ module Evaluator where
     mkGlobals = do
         ev <- newEnv
         _  <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
+        -- printEnv ev
         return ev
 
     initState :: Map.Map Expr Int -> IO InterpreterState

@@ -136,7 +136,7 @@ module Scanner (parse) where
     addToken :: TokenType -> Lexer Token
     addToken tok = do
         p <- getState
-        let token = Token tok (slice (contents p) (start p) (current p)) (start p) (current p - start p) in
+        let token = Token tok (slice (contents p) (start p) (current p)) (start p) (current p - start p) (line p) in
             do
                 putState (p {tokens = token: tokens p})
                 return token
@@ -214,7 +214,7 @@ module Scanner (parse) where
             return (c:cs))
 
     throwaway :: Token
-    throwaway = Token WS "" 0 0
+    throwaway = Token WS "" 0 0 0
 
 
     scanWhile :: (Char -> Bool) -> Lexer String

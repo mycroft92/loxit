@@ -3,6 +3,7 @@ module Environment where
     import Data.IORef ( IORef, modifyIORef', newIORef, readIORef )
     import Data.Map.Strict as Map ( Map, empty, lookup, insert, member)
     import Expr (Value (..))
+    import Data.Map as M (foldrWithKey)
 
     data Env = Env {
         e_values  :: IORef (Map.Map String Value),
@@ -11,13 +12,18 @@ module Environment where
 
     printEnv :: Env -> IO String
     printEnv e = do
-        ev <- readIORef (e_values e)
+        ev  <- readIORef (e_values e)
         enc <- readIORef (enclosing e)
         case enc of
-            Nothing -> return $ show ev
+            Nothing -> do
+                let x = foldrWithKey (\k v acc -> show k ++":"++ show v ++ ", "++ acc) "" ev in
+                    print x >> return x
             Just e' -> do
                 p <- printEnv e'
-                return $ p ++ "\n\t"++show ev
+                let x = foldrWithKey (\k v acc -> show k ++":"++ show v ++ ", "++ acc) "" ev in 
+                    do 
+                        print $ "\n\t"++x
+                        return $ p ++ "\n\t"++ x
 
     newEnv :: IO Env
     newEnv = do
@@ -41,7 +47,13 @@ module Environment where
                 return $ Env (e_values s) enc
 
     define :: String -> Value -> Env -> IO ()
-    define name val env = modifyIORef' (e_values env)  (Map.insert name val)
+    define name val env = do
+        print "Modifying environment"
+        printEnv env
+        modifyIORef' (e_values env)  (Map.insert name val)
+        print "Modified env"
+        printEnv env
+        print "###########"
 
     assign :: String -> Value -> Env -> IO (Maybe ())
     assign name val env = ifM (isMember name env) (Just <$> define name val env) (do
@@ -62,6 +74,21 @@ module Environment where
             Nothing -> case enc of
                             Nothing -> return Nothing
                             Just ev -> getVar vnam ev
+            Just x  -> return $ Just x 
+    -- Searches only in this env
+    getVarEnv :: String -> Env -> IO (Maybe Value)
+    getVarEnv vnam env = do
+        m   <- readIORef (e_values env)
+        enc <- readIORef (enclosing env)
+        print $ "searching vnam:" ++ vnam ++" in:"
+        print $ (M.foldrWithKey (\k v acc-> show k ++":" ++show v++ " "++ acc) "" m)
+        -- return $ Map.lookup vnam m
+        case Map.lookup vnam m of
+            Nothing -> case enc of
+                            Nothing -> return Nothing
+                            Just ev -> do
+                                -- print $ (M.foldrWithKey (\k v acc-> show k ++":" ++show v++ " "++ acc) "" ev)
+                                getVarEnv vnam ev
             Just x  -> return $ Just x 
 
     readEnvAt :: Int -> Env -> IO (Maybe Env)

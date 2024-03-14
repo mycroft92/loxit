@@ -3,11 +3,14 @@ module Resolver (runResolver) where
     import Expr
     import Error
     import Control.Monad.Except (ExceptT(..), runExceptT, throwError, catchError)
-    import Control.Monad.State  (State,
+    import Control.Monad.State  (State, StateT,
       runState,
+      runStateT,
       MonadState(get, put),
+      MonadIO(liftIO),
       MonadTrans(lift) )
     import Data.Map.Strict as Map
+    import Data.Map as M
     import Data.Foldable (forM_, foldr)
     import Stack
     import Data.Maybe (fromJust)
@@ -21,7 +24,7 @@ module Resolver (runResolver) where
     }
 
     -- running runExceptT on this gives StateT ResolverState IO (Either InterpreterError a)  
-    type Resolver a = ExceptT InterpreterError (State ResolverState) a
+    type Resolver a = ExceptT InterpreterError (StateT ResolverState IO) a
 
     _getScopes :: Resolver Scopes
     _getScopes = do
@@ -106,7 +109,9 @@ module Resolver (runResolver) where
         lc <- _getScopes
         let (scope, stack) = (fromJust . pop) lc in
             let scope' = Map.insert x p scope in
-                _putScopes (push scope' stack)
+                do
+                    -- liftIO $ print (M.foldrWithKey (\k v acc -> show k ++": " ++show v++","++acc) "" scope')
+                    _putScopes (push scope' stack)
 
 
     peekInScope :: String -> Resolver (Maybe Bool)
@@ -172,9 +177,14 @@ module Resolver (runResolver) where
         forM_ val (_addExpr expr)
     
 
-    runResolver :: [Decl] -> Either InterpreterError (Map.Map Expr Int)
-    runResolver decls = 
-        case  runState (runExceptT $ resolveDecls decls) (ResolverState [] Map.empty) of
-            (Left err, _) -> Left err
-            (Right _, st) -> Right (locals st)
+    runResolver :: [Decl] -> IO (Either InterpreterError (Map.Map Expr Int))
+    runResolver decls = do
+        v <-  runStateT (runExceptT $ resolveDecls decls) (ResolverState [] Map.empty)
+        case v  of
+            (Left err, _) -> return $ Left err
+            (Right _, st) -> do
+                let val = locals st in
+                    do
+                        print (M.foldrWithKey (\k v acc -> show k ++": " ++show v++","++acc) "" val)
+                        return $ Right (locals st)
     -- lookupVariable :: Token -> Expr -> 

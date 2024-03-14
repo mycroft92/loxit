@@ -50,8 +50,9 @@ module TokenTypes where
         tokenType :: TokenType,
         lexeme    :: String,
         st        :: Int,
-        len       :: Int
+        len       :: Int,
+        line      :: Int
     } deriving (Show, Eq, Ord)
     
     makeEOF :: Token
-    makeEOF = Token { tokenType = EOF, lexeme ="\0", st = 0, len=0}
+    makeEOF = Token { tokenType = EOF, lexeme ="\0", st = 0, len=0, line= -1}

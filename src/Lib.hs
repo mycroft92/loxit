@@ -24,10 +24,10 @@ runFile s = do
     
     contents <- readFile s
     decl <- runParser contents s
-    case runResolver decl of
+    v <- runResolver decl
+    case v of
         Left err -> print err >> return 1
         Right m' -> do
-            mapM_ print m'
             env <- initState m'
             res <- runInterpreter decl env
             case res of
