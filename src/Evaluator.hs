@@ -22,7 +22,7 @@ module Evaluator where
 
     data InterpreterState = InterpreterState {
         env          :: IORef Env,
-        globals      :: IORef Env,   -- why is this problematic with IOREFs?
+        globals      :: Env,   -- why is this problematic with IOREFs?
         functionEnvs :: Map.Map Value (Env, Decl),
         locals       :: Map.Map Expr Int
     }
@@ -58,7 +58,8 @@ module Evaluator where
     _getGlobal :: Interpreter Env
     _getGlobal = do
         en  <- lift get
-        liftIO $ readIORef (globals en)
+        return (globals en) -- This actually works! You can hold a changing map and if the pointer updates it, this value changes as well
+        -- liftIO $ readIORef (globals en)
 
     _getLocals :: Interpreter (Map.Map Expr Int)
     _getLocals = do
@@ -95,18 +96,6 @@ module Evaluator where
 
     stmtEval (Expression e) = evaluate e
 
-    stmtEval (Block ds)  = do
-        previous <- _getEnv
-        new_env <- liftIO $ createChildEnv previous
-        _putEnv new_env
-        catchError (do
-            v <- declEvaluator ds
-            _putEnv previous
-            return v) (\e -> do
-                -- liftIO $ print e -- this would be stack trace
-                _putEnv previous
-                throwError e)
-
     stmtEval (ITE bc t mf) =
         ifM  (isTruthy bc) (stmtEval t) (
             case mf of
@@ -118,6 +107,32 @@ module Evaluator where
     stmtEval (Return e) = do
         v <- evaluate e
         throwError $ ReturnException v
+    
+    stmtEval (Block ds)  = do
+        previous <- _getEnv
+        new_env <- liftIO $ createChildEnv previous
+        executeBlock ds new_env
+        -- _putEnv new_env
+        -- catchError (do
+        --     v <- declEvaluator ds
+        --     _putEnv previous
+        --     return v) (\e -> do
+        --         -- liftIO $ print e -- this would be stack trace
+        --         _putEnv previous
+        --         throwError e)
+
+    -- This is a helper function, called from both function calls and stmt eval
+    executeBlock :: [Decl] -> Env -> Interpreter Value
+    executeBlock ds env' = do
+        prev <- _getEnv
+        _putEnv env'
+        catchError (do
+            v <- declEvaluator ds
+            _putEnv prev
+            return v) (\e -> do
+                -- liftIO $ print e -- this would be stack trace
+                _putEnv prev
+                throwError e)
 
 
     isTruthy :: Expr -> Interpreter Bool
@@ -214,13 +229,9 @@ module Evaluator where
         en   <- _getEnv
         g    <- _getGlobal
         dist <- lookupLocal e'
-        liftIO $ putStrLn $ "Looking up "++show e' ++ " at dist:"++show dist
-        -- liftIO $ printEnv g
         case dist of
             Just d  -> findVarAt x d en
-            Nothing -> do
-                -- liftIO $ printEnv g
-                findVar x g
+            Nothing -> findVar x g
 
     evaluate (Call cl args) = do
         fn   <- evaluate cl
@@ -249,8 +260,6 @@ module Evaluator where
     
     findVar :: Token -> Env -> Interpreter Value
     findVar x env' = do
-        liftIO $ print  $" search for " ++ lexeme x ++ " in "
-        liftIO $ printEnv env'
         v <- liftIO $ getVarEnv (lexeme x) env'
         case v of
             Just val -> return val
@@ -258,9 +267,12 @@ module Evaluator where
     findVarAt :: Token -> Int -> Env -> Interpreter Value
     findVarAt x dist env' = do
         env'' <- liftIO $ readEnvAt dist env'
+        -- liftIO $ print $ "find var " ++ lexeme x ++ " in env:"
+        -- liftIO $ printEnv env'
         case env'' of
             Nothing -> throwError $ RuntimeError $ "No env at dist:" ++ show dist ++" while searching for var"++show x
-            Just env'' -> findVar x env''
+            Just env'' -> do
+                findVar x env''
     
     lookupLocal :: Expr -> Interpreter (Maybe Int)
     lookupLocal e = Map.lookup e <$> _getLocals
@@ -280,13 +292,21 @@ module Evaluator where
         fenv <- _getFenv
         case Map.lookup f fenv of
             Nothing -> throwError $ RuntimeError $ "Undefined function: "++show f
+            Just (e, Fn _ argT (Block ds)) -> do
+                e' <- liftIO $ createChildEnv e -- create a child of defined env
+                _  <- defineArgs argT argV e'
+                --The call to executeBlock replaces the original env (en) properly
+                catchError (executeBlock ds e') (\e ->
+                    case e of 
+                        ReturnException v -> return v
+                        _ -> throwError e)
             Just (e, Fn _ argT stmt) -> do
                 en <- _getEnv
-                e' <- liftIO $ createChildEnv e
+                e' <- liftIO $ createChildEnv e -- we are creating 2 sets of environments (here and in block for every call, which is throwing off the resolver)
                 _  <- _putEnv e'
                 _  <- defineArgs argT argV e'
                 catchError (do  --if it is a return we need to handle it here and restore the env
-                    v <- stmtEval stmt
+                    v <- stmtEval stmt 
                     _ <- _putEnv en
                     return v) (\e ->
                         case e of
@@ -315,14 +335,13 @@ module Evaluator where
     mkGlobals = do
         ev <- newEnv
         _  <- define "clock" (LoxFn "clock" 0 FFI) ev --define clock as  a global
-        -- printEnv ev
         return ev
 
     initState :: Map.Map Expr Int -> IO InterpreterState
     initState m = do
         glob <- mkGlobals
         globe <- newIORef glob
-        return $ InterpreterState globe globe Map.empty m
+        return $ InterpreterState globe glob Map.empty m
 
     runInterpreter :: [Decl] -> InterpreterState -> IO (Either InterpreterError Value)
     runInterpreter e st = do

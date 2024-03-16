@@ -33,6 +33,9 @@ module Environment where
 
     createChildEnv :: Env -> IO Env
     createChildEnv env = do
+        -- print "Create Env called with parent:"
+        -- printEnv env
+        -- print "########"
         ev  <- newIORef Map.empty
         enc <- newIORef $ Just env
         return $ Env ev enc
@@ -48,12 +51,12 @@ module Environment where
 
     define :: String -> Value -> Env -> IO ()
     define name val env = do
-        print "Modifying environment"
-        printEnv env
+        -- print "Modifying environment"
+        -- printEnv env
         modifyIORef' (e_values env)  (Map.insert name val)
-        print "Modified env"
-        printEnv env
-        print "###########"
+        -- print "Modified env"
+        -- printEnv env
+        -- print "###########"
 
     assign :: String -> Value -> Env -> IO (Maybe ())
     assign name val env = ifM (isMember name env) (Just <$> define name val env) (do
@@ -79,16 +82,8 @@ module Environment where
     getVarEnv :: String -> Env -> IO (Maybe Value)
     getVarEnv vnam env = do
         m   <- readIORef (e_values env)
-        enc <- readIORef (enclosing env)
-        print $ "searching vnam:" ++ vnam ++" in:"
-        print $ (M.foldrWithKey (\k v acc-> show k ++":" ++show v++ " "++ acc) "" m)
-        -- return $ Map.lookup vnam m
         case Map.lookup vnam m of
-            Nothing -> case enc of
-                            Nothing -> return Nothing
-                            Just ev -> do
-                                -- print $ (M.foldrWithKey (\k v acc-> show k ++":" ++show v++ " "++ acc) "" ev)
-                                getVarEnv vnam ev
+            Nothing -> return Nothing
             Just x  -> return $ Just x 
 
     readEnvAt :: Int -> Env -> IO (Maybe Env)

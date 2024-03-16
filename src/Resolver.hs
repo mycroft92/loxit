@@ -11,7 +11,7 @@ module Resolver (runResolver) where
       MonadTrans(lift) )
     import Data.Map.Strict as Map
     import Data.Map as M
-    import Data.Foldable (forM_, foldr)
+    import Data.Foldable (forM_, foldl)
     import Stack
     import Data.Maybe (fromJust)
 
@@ -81,11 +81,18 @@ module Resolver (runResolver) where
                                 = do
         declare name
         define name
-        _beginScope
+        _beginScope -- we dont need this since block already opens a scope
         mapM_ declare args
         mapM_ define args
-        resolveStmt stmts
+        resolveFnBlock stmts
         _endScope
+    
+    -- When blocks are set in functions, the resolution is causing this wierd issue where I am pushing two scopes instead of one
+    -- The problem is caused because I have two syntactic levels for statments and vardecls
+    -- Whenever I encounter fn blocks, I will have to check if it is a block and then NOT push an extra scope, same problem you'll see in evaluator in call section as well.
+    resolveFnBlock :: Stmt -> Resolver ()
+    resolveFnBlock (Block ds) = resolveDecls ds
+    resolveFnBlock x          = resolveStmt x
 
     resolveVarDecl :: VarDecl -> Resolver ()
     resolveVarDecl (DeclE x e) = do
@@ -128,11 +135,11 @@ module Resolver (runResolver) where
     define tk = ifM _isEmpty (return ()) (putInScope (lexeme tk) True)
 
     checkKey :: String -> Resolver (Maybe Int)
-    checkKey x =  snd . Data.Foldable.foldr handle (0,Nothing) <$> _getScopes
+    checkKey x = snd . Data.Foldable.foldl handle (0,Nothing) <$> _getScopes
 
         where
-            handle :: Map.Map String Bool -> (Int, Maybe Int) -> (Int, Maybe Int)
-            handle scope acc@(n,acc') =
+            handle :: (Int, Maybe Int) -> Map.Map String Bool -> (Int, Maybe Int)
+            handle acc@(n,acc') scope=
                 case acc' of
                     Nothing -> case Map.lookup x scope of
                         Just _  -> (n, Just n)
@@ -162,6 +169,9 @@ module Resolver (runResolver) where
     resolveExpr (Group e)        = resolveExpr e
     resolveExpr e@(Var tk)       =
         do
+            -- liftIO $ print e
+            -- lc <- _getLocals
+            -- liftIO $ print lc
             s <- peekInScope (lexeme tk)
             case s of
                 Just False -> throwError $ ResolverError $ "Can't read local variable in its own initializer: "++ show tk
@@ -185,6 +195,6 @@ module Resolver (runResolver) where
             (Right _, st) -> do
                 let val = locals st in
                     do
-                        print (M.foldrWithKey (\k v acc -> show k ++": " ++show v++","++acc) "" val)
-                        return $ Right (locals st)
+                        -- print (M.foldrWithKey (\k v acc -> show k ++": " ++show v++","++acc) "" val)
+                        return $ Right val
     -- lookupVariable :: Token -> Expr -> 
