@@ -1,3 +1,5 @@
+var name = "Div";
+
 fun get(name) {
 
     fun myprint() {
