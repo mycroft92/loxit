@@ -2,12 +2,12 @@ var name = "Div";
 
 fun get(name) {
 
-    fun myprint() {
-        print ("hello "+name);
+    fun myprint(greeting) {
+        print ("hello "+greeting+" "+name);
     }
     return myprint;
 }
 
 var func = get("Madhukar");
 
-func();
+func("Mr.");

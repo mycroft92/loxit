@@ -16,7 +16,7 @@ module Error where
 
     data InterpreterError = 
         Unexpected
-	| ResolverError String 
+        | ResolverError String 
         | RuntimeError String 
         | ParserError String
         | ScannerError ErrInfo
